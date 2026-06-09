@@ -10,4 +10,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 2
+    ignore:
+      - dependency-name: actions/checkout
+        update-types: ["version-update:semver-major"]
+      - dependency-name: actions/setup-go
+        update-types: ["version-update:semver-major"]
