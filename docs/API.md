@@ -69,9 +69,51 @@ Response contains `token` only once. Store it immediately.
 ## List sources
 
 ```http
-GET /v1/sources
+GET /v1/sources?active=true
 X-API-Key: <ADMIN_API_KEY>
 ```
+
+Query params:
+
+| Param | Type | Description |
+| --- | --- | --- |
+| `active` | boolean | Optional active/inactive filter |
+
+## Update source
+
+```http
+PATCH /v1/sources/<SOURCE_ID>
+Content-Type: application/json
+X-API-Key: <ADMIN_API_KEY>
+```
+
+Body supports partial update:
+
+```json
+{
+  "name": "Main landing v2",
+  "telegram_chat_id": "987654321",
+  "is_active": true
+}
+```
+
+## Disable source
+
+```http
+DELETE /v1/sources/<SOURCE_ID>
+X-API-Key: <ADMIN_API_KEY>
+```
+
+This is a soft delete. The source becomes inactive, existing events stay in storage.
+
+## Rotate source token
+
+```http
+POST /v1/sources/<SOURCE_ID>/rotate-token
+X-API-Key: <ADMIN_API_KEY>
+```
+
+Returns a new `token` once. The old webhook token stops working immediately.
 
 ## Receive webhook
 
@@ -80,7 +122,7 @@ POST /v1/hooks/<SOURCE_TOKEN>
 Content-Type: application/json
 ```
 
-Body must be a non-empty JSON object.
+Body must be a single non-empty JSON object.
 
 Example:
 
@@ -112,17 +154,51 @@ Response:
 ## List events
 
 ```http
-GET /v1/events?limit=50&offset=0
+GET /v1/events?limit=50&offset=0&source=<SOURCE_ID>&type=lead.created&origin=landing&duplicate=false&from=2026-06-09T00:00:00Z&to=2026-06-10T00:00:00Z
 X-API-Key: <ADMIN_API_KEY>
 ```
 
-`limit` is capped at 200.
+Query params:
+
+| Param | Type | Description |
+| --- | --- | --- |
+| `limit` | integer | Page size, capped at 200 |
+| `offset` | integer | Offset pagination |
+| `source` | string | Source public ID |
+| `type` | string | Event type alias |
+| `event_type` | string | Event type |
+| `origin` | string | Origin/source field from payload |
+| `duplicate` | boolean | Duplicate flag |
+| `from` | RFC3339 | Created at lower bound |
+| `to` | RFC3339 | Created at upper bound |
 
 ## Get event
 
 ```http
 GET /v1/events/<EVENT_ID>
 X-API-Key: <ADMIN_API_KEY>
+```
+
+## Stats
+
+```http
+GET /v1/stats
+X-API-Key: <ADMIN_API_KEY>
+```
+
+Response:
+
+```json
+{
+  "total_events": 100,
+  "unique_events": 91,
+  "duplicate_events": 9,
+  "events_24h": 12,
+  "sources": 3,
+  "active_sources": 2,
+  "by_type": [{"key":"lead.created","count":80}],
+  "by_origin": [{"key":"landing","count":70}]
+}
 ```
 
 ## Error response
