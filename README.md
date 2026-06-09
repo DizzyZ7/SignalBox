@@ -1,14 +1,17 @@
 # SignalBox
 
-SignalBox is a production-oriented Go service for receiving webhooks, storing events in PostgreSQL, detecting duplicate payloads, and forwarding new events to Telegram.
+SignalBox is a production-oriented Go service for receiving webhooks, storing events in PostgreSQL, detecting duplicate payloads, forwarding new events to Telegram, and managing webhook sources through an admin API.
 
 ## Features
 
 - Public webhook URL per source
 - Admin API protected by `X-API-Key`
 - Source tokens stored only as SHA-256 hashes
+- Source update, disable and token rotation endpoints
 - PostgreSQL event storage
 - Duplicate detection without losing audit records
+- Event filters by source, type, origin, duplicate flag and time range
+- Aggregated stats endpoint
 - Optional Telegram notifications
 - Health and readiness probes
 - Docker and Docker Compose setup
@@ -60,7 +63,21 @@ curl -X POST http://localhost:8080/v1/hooks/<SOURCE_TOKEN> \
 List events:
 
 ```bash
-curl http://localhost:8080/v1/events \
+curl "http://localhost:8080/v1/events?type=lead.created&duplicate=false" \
+  -H "X-API-Key: <ADMIN_API_KEY>"
+```
+
+Get stats:
+
+```bash
+curl http://localhost:8080/v1/stats \
+  -H "X-API-Key: <ADMIN_API_KEY>"
+```
+
+Rotate source token:
+
+```bash
+curl -X POST http://localhost:8080/v1/sources/<SOURCE_ID>/rotate-token \
   -H "X-API-Key: <ADMIN_API_KEY>"
 ```
 
