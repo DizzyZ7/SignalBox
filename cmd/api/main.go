@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -66,6 +67,22 @@ type Event struct {
 	CreatedAt   time.Time       `json:"created_at"`
 }
 
+type StatRow struct {
+	Key   string `json:"key"`
+	Count int64  `json:"count"`
+}
+
+type StatsResponse struct {
+	TotalEvents     int64     `json:"total_events"`
+	UniqueEvents    int64     `json:"unique_events"`
+	DuplicateEvents int64     `json:"duplicate_events"`
+	Events24h       int64     `json:"events_24h"`
+	Sources         int64     `json:"sources"`
+	ActiveSources   int64     `json:"active_sources"`
+	ByType          []StatRow `json:"by_type"`
+	ByOrigin        []StatRow `json:"by_origin"`
+}
+
 type App struct {
 	cfg    Config
 	pool   *pgxpool.Pool
@@ -73,9 +90,14 @@ type App struct {
 	client *http.Client
 }
 
+type migration struct {
+	version string
+	sql     string
+}
+
 var errNotFound = errors.New("not found")
 
-const migrationSQL = `
+const migration001SQL = `
 CREATE TABLE IF NOT EXISTS webhook_sources (
     id BIGSERIAL PRIMARY KEY,
     public_id TEXT NOT NULL UNIQUE,
@@ -126,6 +148,17 @@ CREATE TABLE IF NOT EXISTS delivery_attempts (
 );
 `
 
+const migration002SQL = `
+CREATE INDEX IF NOT EXISTS idx_sources_active_created_at ON webhook_sources(is_active, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_events_external_id ON events(external_id);
+CREATE INDEX IF NOT EXISTS idx_delivery_attempts_event_created_at ON delivery_attempts(event_id, created_at DESC);
+`
+
+var migrations = []migration{
+	{version: "001_init", sql: migration001SQL},
+	{version: "002_indexes", sql: migration002SQL},
+}
+
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	cfg, err := loadConfig()
@@ -156,8 +189,12 @@ func main() {
 	mux.HandleFunc("POST /v1/hooks/{token}", app.receiveWebhook)
 	mux.Handle("POST /v1/sources", app.admin(http.HandlerFunc(app.createSource)))
 	mux.Handle("GET /v1/sources", app.admin(http.HandlerFunc(app.listSources)))
+	mux.Handle("PATCH /v1/sources/{id}", app.admin(http.HandlerFunc(app.updateSource)))
+	mux.Handle("DELETE /v1/sources/{id}", app.admin(http.HandlerFunc(app.deleteSource)))
+	mux.Handle("POST /v1/sources/{id}/rotate-token", app.admin(http.HandlerFunc(app.rotateSourceToken)))
 	mux.Handle("GET /v1/events", app.admin(http.HandlerFunc(app.listEvents)))
 	mux.Handle("GET /v1/events/{id}", app.admin(http.HandlerFunc(app.getEvent)))
+	mux.Handle("GET /v1/stats", app.admin(http.HandlerFunc(app.stats)))
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
@@ -209,6 +246,9 @@ func loadConfig() (Config, error) {
 	}
 	if len(cfg.AdminAPIKey) < 16 {
 		return Config{}, errors.New("ADMIN_API_KEY must be at least 16 characters")
+	}
+	if cfg.MaxBodyBytes < 1024 || cfg.MaxBodyBytes > 10<<20 {
+		return Config{}, errors.New("MAX_BODY_BYTES must be between 1024 and 10485760")
 	}
 	return cfg, nil
 }
@@ -275,25 +315,33 @@ func (a *App) migrate(ctx context.Context) error {
 	if _, err := a.pool.Exec(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations(version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`); err != nil {
 		return err
 	}
-	var exists bool
-	if err := a.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = '001_init')`).Scan(&exists); err != nil {
-		return err
+
+	for _, item := range migrations {
+		var exists bool
+		if err := a.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = $1)`, item.version).Scan(&exists); err != nil {
+			return err
+		}
+		if exists {
+			continue
+		}
+		tx, err := a.pool.Begin(ctx)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, item.sql); err != nil {
+			_ = tx.Rollback(ctx)
+			return err
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES($1)`, item.version); err != nil {
+			_ = tx.Rollback(ctx)
+			return err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return err
+		}
 	}
-	if exists {
-		return nil
-	}
-	tx, err := a.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	if _, err := tx.Exec(ctx, migrationSQL); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES('001_init')`); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+
+	return nil
 }
 
 func (a *App) health(w http.ResponseWriter, r *http.Request) {
@@ -334,7 +382,13 @@ func (a *App) createSource(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "id generation failed", requestID(r))
 		return
 	}
-	source := Source{PublicID: publicID, Name: name, TokenHash: hashString(token), TokenHint: tokenHint(token), TelegramChatID: normalizePtr(input.TelegramChatID)}
+	source := Source{
+		PublicID:       publicID,
+		Name:           name,
+		TokenHash:      hashString(token),
+		TokenHint:      tokenHint(token),
+		TelegramChatID: normalizePtr(input.TelegramChatID),
+	}
 	var chat sql.NullString
 	if err := a.pool.QueryRow(r.Context(), `
 		INSERT INTO webhook_sources(public_id, name, token_hash, token_hint, telegram_chat_id)
@@ -353,24 +407,172 @@ func (a *App) createSource(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) listSources(w http.ResponseWriter, r *http.Request) {
-	rows, err := a.pool.Query(r.Context(), `SELECT id, public_id, name, token_hash, token_hint, telegram_chat_id, is_active, created_at, updated_at FROM webhook_sources ORDER BY created_at DESC`)
+	activeFilter := strings.TrimSpace(r.URL.Query().Get("active"))
+	query := `SELECT id, public_id, name, token_hash, token_hint, telegram_chat_id, is_active, created_at, updated_at FROM webhook_sources`
+	args := make([]any, 0, 1)
+	if activeFilter != "" {
+		active, err := strconv.ParseBool(activeFilter)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "active must be boolean", requestID(r))
+			return
+		}
+		args = append(args, active)
+		query += ` WHERE is_active = $1`
+	}
+	query += ` ORDER BY created_at DESC`
+
+	rows, err := a.pool.Query(r.Context(), query, args...)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error", requestID(r))
 		return
 	}
 	defer rows.Close()
+
 	items := make([]Source, 0)
 	for rows.Next() {
-		var s Source
-		var chat sql.NullString
-		if err := rows.Scan(&s.ID, &s.PublicID, &s.Name, &s.TokenHash, &s.TokenHint, &chat, &s.IsActive, &s.CreatedAt, &s.UpdatedAt); err != nil {
+		s, err := scanSource(rows)
+		if err != nil {
 			writeError(w, http.StatusInternalServerError, "internal error", requestID(r))
 			return
 		}
-		s.TelegramChatID = nullStringPtr(chat)
 		items = append(items, s)
 	}
+	if err := rows.Err(); err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error", requestID(r))
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (a *App) updateSource(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.PathValue("id"))
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "source id is required", requestID(r))
+		return
+	}
+
+	var input struct {
+		Name           *string `json:"name"`
+		TelegramChatID *string `json:"telegram_chat_id"`
+		IsActive       *bool   `json:"is_active"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64*1024)).Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json body", requestID(r))
+		return
+	}
+	if input.Name == nil && input.TelegramChatID == nil && input.IsActive == nil {
+		writeError(w, http.StatusBadRequest, "at least one field is required", requestID(r))
+		return
+	}
+
+	current, err := a.getSourceByPublicID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeError(w, http.StatusNotFound, "source not found", requestID(r))
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal error", requestID(r))
+		return
+	}
+
+	name := current.Name
+	if input.Name != nil {
+		name = strings.TrimSpace(*input.Name)
+		if name == "" || len(name) > 120 {
+			writeError(w, http.StatusBadRequest, "source name must be shorter than 120 characters", requestID(r))
+			return
+		}
+	}
+	chat := current.TelegramChatID
+	if input.TelegramChatID != nil {
+		chat = normalizePtr(input.TelegramChatID)
+	}
+	active := current.IsActive
+	if input.IsActive != nil {
+		active = *input.IsActive
+	}
+
+	var out Source
+	var outChat sql.NullString
+	if err := a.pool.QueryRow(r.Context(), `
+		UPDATE webhook_sources
+		SET name = $2, telegram_chat_id = $3, is_active = $4, updated_at = NOW()
+		WHERE public_id = $1
+		RETURNING id, public_id, name, token_hash, token_hint, telegram_chat_id, is_active, created_at, updated_at
+	`, id, name, chat, active).Scan(&out.ID, &out.PublicID, &out.Name, &out.TokenHash, &out.TokenHint, &outChat, &out.IsActive, &out.CreatedAt, &out.UpdatedAt); err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error", requestID(r))
+		return
+	}
+	out.TelegramChatID = nullStringPtr(outChat)
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (a *App) deleteSource(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.PathValue("id"))
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "source id is required", requestID(r))
+		return
+	}
+	tag, err := a.pool.Exec(r.Context(), `UPDATE webhook_sources SET is_active = FALSE, updated_at = NOW() WHERE public_id = $1`, id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error", requestID(r))
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		writeError(w, http.StatusNotFound, "source not found", requestID(r))
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *App) rotateSourceToken(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.PathValue("id"))
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "source id is required", requestID(r))
+		return
+	}
+	token, err := randomToken()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "token generation failed", requestID(r))
+		return
+	}
+
+	var s Source
+	var chat sql.NullString
+	err = a.pool.QueryRow(r.Context(), `
+		UPDATE webhook_sources
+		SET token_hash = $2, token_hint = $3, updated_at = NOW()
+		WHERE public_id = $1
+		RETURNING id, public_id, name, token_hash, token_hint, telegram_chat_id, is_active, created_at, updated_at
+	`, id, hashString(token), tokenHint(token)).Scan(&s.ID, &s.PublicID, &s.Name, &s.TokenHash, &s.TokenHint, &chat, &s.IsActive, &s.CreatedAt, &s.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "source not found", requestID(r))
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal error", requestID(r))
+		return
+	}
+	s.TelegramChatID = nullStringPtr(chat)
+	s.Token = token
+	writeJSON(w, http.StatusOK, s)
+}
+
+func (a *App) getSourceByPublicID(ctx context.Context, publicID string) (Source, error) {
+	var s Source
+	var chat sql.NullString
+	err := a.pool.QueryRow(ctx, `
+		SELECT id, public_id, name, token_hash, token_hint, telegram_chat_id, is_active, created_at, updated_at
+		FROM webhook_sources WHERE public_id = $1 LIMIT 1
+	`, publicID).Scan(&s.ID, &s.PublicID, &s.Name, &s.TokenHash, &s.TokenHint, &chat, &s.IsActive, &s.CreatedAt, &s.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Source{}, errNotFound
+		}
+		return Source{}, err
+	}
+	s.TelegramChatID = nullStringPtr(chat)
+	return s, nil
 }
 
 func (a *App) receiveWebhook(w http.ResponseWriter, r *http.Request) {
@@ -390,6 +592,11 @@ func (a *App) receiveWebhook(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "payload must be a non-empty json object", requestID(r))
 		return
 	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		writeError(w, http.StatusBadRequest, "payload must contain a single json object", requestID(r))
+		return
+	}
+
 	source, err := a.findSourceByToken(r.Context(), token)
 	if err != nil {
 		if errors.Is(err, errNotFound) {
@@ -438,7 +645,17 @@ func (a *App) insertEvent(ctx context.Context, source Source, payload map[string
 	if err != nil {
 		return Event{}, false, err
 	}
-	event := Event{PublicID: publicID, SourceID: source.ID, EventType: extractString(payload, "type", "event_type", "event"), Origin: extractString(payload, "source", "origin", "channel"), ExternalID: extractString(payload, "id", "external_id", "request_id"), Payload: canonical, PayloadHash: hashBytes(canonical), IP: stringPtr(ip), UserAgent: stringPtr(ua)}
+	event := Event{
+		PublicID:    publicID,
+		SourceID:    source.ID,
+		EventType:   extractString(payload, "type", "event_type", "event"),
+		Origin:      extractString(payload, "source", "origin", "channel"),
+		ExternalID:  extractString(payload, "id", "external_id", "request_id"),
+		Payload:     canonical,
+		PayloadHash: hashBytes(canonical),
+		IP:          stringPtr(ip),
+		UserAgent:   stringPtr(ua),
+	}
 	tx, err := a.pool.Begin(ctx)
 	if err != nil {
 		return Event{}, false, err
@@ -479,17 +696,70 @@ func (a *App) listEvents(w http.ResponseWriter, r *http.Request) {
 		limit = 50
 	}
 	offset := queryInt(r, "offset", 0)
-	rows, err := a.pool.Query(r.Context(), `
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := `
 		SELECT e.id, e.public_id, e.source_id, e.event_type, e.origin, e.external_id, e.payload, e.payload_hash, e.ip, e.user_agent, e.is_duplicate, e.created_at,
 		       s.id, s.public_id, s.name, s.token_hash, s.token_hint, s.telegram_chat_id, s.is_active, s.created_at, s.updated_at
 		FROM events e JOIN webhook_sources s ON s.id = e.source_id
-		ORDER BY e.created_at DESC, e.id DESC LIMIT $1 OFFSET $2
-	`, limit, offset)
+		WHERE 1 = 1
+	`
+	args := make([]any, 0, 8)
+	addFilter := func(sqlPart string, value any) {
+		args = append(args, value)
+		query += fmt.Sprintf(" AND "+sqlPart, len(args))
+	}
+
+	if value := strings.TrimSpace(r.URL.Query().Get("source")); value != "" {
+		addFilter("s.public_id = $%d", value)
+	}
+	if value := strings.TrimSpace(r.URL.Query().Get("type")); value != "" {
+		addFilter("e.event_type = $%d", value)
+	}
+	if value := strings.TrimSpace(r.URL.Query().Get("event_type")); value != "" {
+		addFilter("e.event_type = $%d", value)
+	}
+	if value := strings.TrimSpace(r.URL.Query().Get("origin")); value != "" {
+		addFilter("e.origin = $%d", value)
+	}
+	if value := strings.TrimSpace(r.URL.Query().Get("duplicate")); value != "" {
+		parsed, err := strconv.ParseBool(value)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "duplicate must be boolean", requestID(r))
+			return
+		}
+		addFilter("e.is_duplicate = $%d", parsed)
+	}
+	if value := strings.TrimSpace(r.URL.Query().Get("from")); value != "" {
+		parsed, err := time.Parse(time.RFC3339, value)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "from must be RFC3339 timestamp", requestID(r))
+			return
+		}
+		addFilter("e.created_at >= $%d", parsed)
+	}
+	if value := strings.TrimSpace(r.URL.Query().Get("to")); value != "" {
+		parsed, err := time.Parse(time.RFC3339, value)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "to must be RFC3339 timestamp", requestID(r))
+			return
+		}
+		addFilter("e.created_at <= $%d", parsed)
+	}
+
+	args = append(args, limit, offset)
+	query += fmt.Sprintf(" ORDER BY e.created_at DESC, e.id DESC LIMIT $%d OFFSET $%d", len(args)-1, len(args))
+
+	rows, err := a.pool.Query(r.Context(), query, args...)
 	if err != nil {
+		a.log.Error("list events failed", slog.String("error", err.Error()))
 		writeError(w, http.StatusInternalServerError, "internal error", requestID(r))
 		return
 	}
 	defer rows.Close()
+
 	items := make([]Event, 0)
 	for rows.Next() {
 		e, err := scanEvent(rows)
@@ -498,6 +768,10 @@ func (a *App) listEvents(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		items = append(items, e)
+	}
+	if err := rows.Err(); err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error", requestID(r))
+		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "limit": limit, "offset": offset})
 }
@@ -525,7 +799,69 @@ func (a *App) getEvent(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, e)
 }
 
+func (a *App) stats(w http.ResponseWriter, r *http.Request) {
+	var out StatsResponse
+	err := a.pool.QueryRow(r.Context(), `
+		SELECT
+			COUNT(*)::BIGINT,
+			COUNT(*) FILTER (WHERE is_duplicate = FALSE)::BIGINT,
+			COUNT(*) FILTER (WHERE is_duplicate = TRUE)::BIGINT,
+			COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours')::BIGINT
+		FROM events
+	`).Scan(&out.TotalEvents, &out.UniqueEvents, &out.DuplicateEvents, &out.Events24h)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error", requestID(r))
+		return
+	}
+	if err := a.pool.QueryRow(r.Context(), `SELECT COUNT(*)::BIGINT, COUNT(*) FILTER (WHERE is_active = TRUE)::BIGINT FROM webhook_sources`).Scan(&out.Sources, &out.ActiveSources); err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error", requestID(r))
+		return
+	}
+
+	byType, err := a.statRows(r.Context(), `SELECT COALESCE(event_type, 'unknown') AS key, COUNT(*)::BIGINT AS count FROM events GROUP BY key ORDER BY count DESC, key ASC LIMIT 10`)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error", requestID(r))
+		return
+	}
+	byOrigin, err := a.statRows(r.Context(), `SELECT COALESCE(origin, 'unknown') AS key, COUNT(*)::BIGINT AS count FROM events GROUP BY key ORDER BY count DESC, key ASC LIMIT 10`)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error", requestID(r))
+		return
+	}
+	out.ByType = byType
+	out.ByOrigin = byOrigin
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (a *App) statRows(ctx context.Context, query string) ([]StatRow, error) {
+	rows, err := a.pool.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]StatRow, 0)
+	for rows.Next() {
+		var item StatRow
+		if err := rows.Scan(&item.Key, &item.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
 type scanner interface{ Scan(dest ...any) error }
+
+func scanSource(row scanner) (Source, error) {
+	var s Source
+	var chat sql.NullString
+	if err := row.Scan(&s.ID, &s.PublicID, &s.Name, &s.TokenHash, &s.TokenHint, &chat, &s.IsActive, &s.CreatedAt, &s.UpdatedAt); err != nil {
+		return Source{}, err
+	}
+	s.TelegramChatID = nullStringPtr(chat)
+	return s, nil
+}
 
 func scanEvent(row scanner) (Event, error) {
 	var e Event
