@@ -17,10 +17,10 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.23.x'
-          cache: true
+          cache: false
 
-      - name: Download dependencies
-        run: go mod download
+      - name: Prepare modules
+        run: go mod tidy
 
       - name: Format check
         run: test -z "$(gofmt -l .)"
