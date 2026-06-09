@@ -6,11 +6,11 @@ import (
 )
 
 type Limiter struct {
-	mu       sync.Mutex
-	limit    int
-	window   time.Duration
-	buckets  map[string]*bucket
-	now      func() time.Time
+	mu      sync.Mutex
+	limit   int
+	window  time.Duration
+	buckets map[string]*bucket
+	now     func() time.Time
 }
 
 type bucket struct {
