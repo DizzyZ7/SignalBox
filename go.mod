@@ -1,4 +1,4 @@
-module signalbox
+module github.com/DizzyZ7/SignalBox
 
 go 1.23
 
