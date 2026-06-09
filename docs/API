@@ -1,0 +1,41 @@
+# SignalBox API
+
+Admin endpoints require `X-API-Key`.
+
+## Create source
+
+POST `/v1/sources`
+
+```json
+{
+  "name": "Main landing",
+  "telegram_chat_id": "123456789"
+}
+```
+
+The response contains a source token. Store it immediately.
+
+## Receive webhook
+
+POST `/v1/hooks/{source_token}`
+
+```json
+{
+  "type": "lead.created",
+  "source": "landing",
+  "name": "Ivan",
+  "contact": "@ivan"
+}
+```
+
+## Events
+
+GET `/v1/events?limit=50&offset=0`
+
+GET `/v1/events/{event_id}`
+
+## Health
+
+GET `/healthz`
+
+GET `/readyz`
