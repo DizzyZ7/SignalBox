@@ -1,6 +1,6 @@
 # Architecture
 
-SignalBox v0.3 is split into internal layers instead of keeping all logic in `cmd/api/main.go`.
+SignalBox v0.4 is split into internal layers instead of keeping all logic in `cmd/api/main.go`.
 
 ## Structure
 
@@ -17,6 +17,9 @@ internal/domain
 internal/security
   security.go          token generation, hashing, id helpers
 
+internal/ratelimit
+  limiter.go           in-memory fixed-window webhook limiter
+
 internal/storage
   postgres.go          PostgreSQL connection, migrations, queries
 
@@ -32,6 +35,7 @@ internal/httpapi
 ```text
 client/webhook
   -> internal/httpapi
+  -> internal/ratelimit
   -> internal/storage
   -> PostgreSQL
   -> optional internal/delivery Telegram notification
@@ -44,12 +48,14 @@ client/webhook
 - PostgreSQL-specific logic is isolated inside `internal/storage`.
 - Telegram delivery is isolated behind a notifier interface.
 - HTTP handlers do validation and translate storage errors into API responses.
+- Public webhook requests are rate-limited by client IP and source token.
 - Source tokens are never stored in plain text, only SHA-256 hashes.
 - Source token is returned only on source creation and token rotation.
 
 ## Current limitations
 
 - Telegram delivery is async and lightweight, but not a durable queue.
+- Rate limiting is in-memory, so limits are per application replica.
 - Pagination is offset-based, not cursor-based.
 - Migrations are embedded in Go code.
 - There is no web admin UI yet.
@@ -59,5 +65,5 @@ client/webhook
 - Durable delivery worker with retry/backoff.
 - Cursor pagination for events.
 - OpenAPI specification.
-- Rate limit on public webhook endpoint.
+- Redis-backed distributed rate limit for multi-replica deployments.
 - Separate migration files or migration CLI.
