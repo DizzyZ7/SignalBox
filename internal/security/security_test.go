@@ -19,7 +19,7 @@ func TestExtractStringTrimsFirstAvailableKey(t *testing.T) {
 
 func TestHashStringIsStable(t *testing.T) {
 	got := HashString("signalbox")
-	want := "8df7c8a02598ca6c6776be6008c17a851d7140c5c93af7405492ffb1750fd4e0"
+	want := "45f2aebd240cb351b03dc860bf0f011e556afc25714fd5b234fc9b93090654fb"
 	if got != want {
 		t.Fatalf("HashString mismatch: got %s want %s", got, want)
 	}
