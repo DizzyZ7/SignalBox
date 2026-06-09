@@ -18,6 +18,7 @@ SignalBox is a production-oriented Go service for receiving webhooks, storing ev
 - JSON structured logs
 - Graceful shutdown
 - GitHub Actions CI
+- Layered internal architecture
 
 ## Stack
 
@@ -81,6 +82,18 @@ curl -X POST http://localhost:8080/v1/sources/<SOURCE_ID>/rotate-token \
   -H "X-API-Key: <ADMIN_API_KEY>"
 ```
 
+## Architecture
+
+```text
+cmd/api          app bootstrap
+internal/config  environment loading
+internal/domain  domain models
+internal/security token/id/hash helpers
+internal/storage PostgreSQL queries and migrations
+internal/delivery Telegram notification delivery
+internal/httpapi HTTP routing and handlers
+```
+
 ## Development
 
 ```bash
@@ -93,6 +106,7 @@ make build
 ## Documentation
 
 - [API](docs/API.md)
+- [Architecture](docs/ARCHITECTURE.md)
 - [Deployment](docs/DEPLOY.md)
 
 ## Production notes
