@@ -124,6 +124,22 @@ Content-Type: application/json
 
 Body must be a single non-empty JSON object.
 
+The public webhook endpoint is rate-limited by client IP and source token. Defaults:
+
+```text
+WEBHOOK_RATE_LIMIT_REQUESTS=120
+WEBHOOK_RATE_LIMIT_WINDOW=1m
+```
+
+Set `WEBHOOK_RATE_LIMIT_REQUESTS=0` to disable webhook rate limiting.
+
+When the limit is exceeded, API returns:
+
+```http
+429 Too Many Requests
+Retry-After: <seconds>
+```
+
 Example:
 
 ```json
@@ -216,5 +232,6 @@ Response:
 - Use a long random `ADMIN_API_KEY`.
 - Keep source tokens private.
 - Put the service behind a reverse proxy with body size limits.
+- Keep webhook rate limits enabled for public deployments.
 - Use external PostgreSQL backups.
 - Set `AUTO_MIGRATE=false` when migrations are managed by deployment tooling.
