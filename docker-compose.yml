@@ -3,15 +3,15 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: signalbox
-      POSTGRES_USER: signalbox
-      POSTGRES_PASSWORD: signalbox
+      POSTGRES_DB: ${POSTGRES_DB:-signalbox}
+      POSTGRES_USER: ${POSTGRES_USER:-signalbox}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-signalbox}
     ports:
       - "5432:5432"
     volumes:
       - signalbox_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U signalbox -d signalbox"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-signalbox} -d $${POSTGRES_DB:-signalbox}"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -24,14 +24,19 @@ services:
         condition: service_healthy
     environment:
       HTTP_ADDR: :8080
-      DATABASE_URL: postgres://signalbox:signalbox@postgres:5432/signalbox?sslmode=disable
+      DATABASE_URL: postgres://${POSTGRES_USER:-signalbox}:${POSTGRES_PASSWORD:-signalbox}@postgres:5432/${POSTGRES_DB:-signalbox}?sslmode=disable
       ADMIN_API_KEY: ${ADMIN_API_KEY:?ADMIN_API_KEY is required}
       AUTO_MIGRATE: "true"
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_DEFAULT_CHAT_ID: ${TELEGRAM_DEFAULT_CHAT_ID:-}
-      MAX_BODY_BYTES: 1048576
+      MAX_BODY_BYTES: ${MAX_BODY_BYTES:-1048576}
     ports:
       - "8080:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/readyz"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
 
 volumes:
   signalbox_pgdata:
