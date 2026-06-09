@@ -6,7 +6,8 @@
 2. Clone repository.
 3. Create `.env` from `.env.example`.
 4. Set a long random `ADMIN_API_KEY`.
-5. Start services:
+5. Review webhook rate limit settings.
+6. Start services:
 
 ```bash
 docker compose --env-file .env up -d --build
@@ -26,6 +27,21 @@ Minimum proxy rules:
 - forward `X-Real-IP`
 - limit request body close to `MAX_BODY_BYTES`
 - enable gzip only for responses, not request bodies
+
+## Webhook rate limiting
+
+Public webhook requests are limited by client IP and source token.
+
+Default local values:
+
+```env
+WEBHOOK_RATE_LIMIT_REQUESTS=120
+WEBHOOK_RATE_LIMIT_WINDOW=1m
+```
+
+Set `WEBHOOK_RATE_LIMIT_REQUESTS=0` only for trusted internal deployments.
+
+For multi-replica deployments, the built-in limiter is per replica. Use sticky sessions or replace it with Redis-backed distributed rate limiting when strict global limits are required.
 
 ## Backups
 
