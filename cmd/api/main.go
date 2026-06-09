@@ -709,20 +709,21 @@ func (a *App) listEvents(w http.ResponseWriter, r *http.Request) {
 	args := make([]any, 0, 8)
 	addFilter := func(sqlPart string, value any) {
 		args = append(args, value)
-		query += fmt.Sprintf(" AND "+sqlPart, len(args))
+		placeholder := "$" + strconv.Itoa(len(args))
+		query += " AND " + strings.Replace(sqlPart, "?", placeholder, 1)
 	}
 
 	if value := strings.TrimSpace(r.URL.Query().Get("source")); value != "" {
-		addFilter("s.public_id = $%d", value)
+		addFilter("s.public_id = ?", value)
 	}
 	if value := strings.TrimSpace(r.URL.Query().Get("type")); value != "" {
-		addFilter("e.event_type = $%d", value)
+		addFilter("e.event_type = ?", value)
 	}
 	if value := strings.TrimSpace(r.URL.Query().Get("event_type")); value != "" {
-		addFilter("e.event_type = $%d", value)
+		addFilter("e.event_type = ?", value)
 	}
 	if value := strings.TrimSpace(r.URL.Query().Get("origin")); value != "" {
-		addFilter("e.origin = $%d", value)
+		addFilter("e.origin = ?", value)
 	}
 	if value := strings.TrimSpace(r.URL.Query().Get("duplicate")); value != "" {
 		parsed, err := strconv.ParseBool(value)
@@ -730,7 +731,7 @@ func (a *App) listEvents(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "duplicate must be boolean", requestID(r))
 			return
 		}
-		addFilter("e.is_duplicate = $%d", parsed)
+		addFilter("e.is_duplicate = ?", parsed)
 	}
 	if value := strings.TrimSpace(r.URL.Query().Get("from")); value != "" {
 		parsed, err := time.Parse(time.RFC3339, value)
@@ -738,7 +739,7 @@ func (a *App) listEvents(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "from must be RFC3339 timestamp", requestID(r))
 			return
 		}
-		addFilter("e.created_at >= $%d", parsed)
+		addFilter("e.created_at >= ?", parsed)
 	}
 	if value := strings.TrimSpace(r.URL.Query().Get("to")); value != "" {
 		parsed, err := time.Parse(time.RFC3339, value)
@@ -746,7 +747,7 @@ func (a *App) listEvents(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "to must be RFC3339 timestamp", requestID(r))
 			return
 		}
-		addFilter("e.created_at <= $%d", parsed)
+		addFilter("e.created_at <= ?", parsed)
 	}
 
 	args = append(args, limit, offset)
@@ -818,12 +819,12 @@ func (a *App) stats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	byType, err := a.statRows(r.Context(), `SELECT COALESCE(event_type, 'unknown') AS key, COUNT(*)::BIGINT AS count FROM events GROUP BY key ORDER BY count DESC, key ASC LIMIT 10`)
+	byType, err := a.statRows(r.Context(), `SELECT COALESCE(event_type, 'unknown') AS key, COUNT(*)::BIGINT AS count FROM events GROUP BY COALESCE(event_type, 'unknown') ORDER BY count DESC, key ASC LIMIT 10`)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error", requestID(r))
 		return
 	}
-	byOrigin, err := a.statRows(r.Context(), `SELECT COALESCE(origin, 'unknown') AS key, COUNT(*)::BIGINT AS count FROM events GROUP BY key ORDER BY count DESC, key ASC LIMIT 10`)
+	byOrigin, err := a.statRows(r.Context(), `SELECT COALESCE(origin, 'unknown') AS key, COUNT(*)::BIGINT AS count FROM events GROUP BY COALESCE(origin, 'unknown') ORDER BY count DESC, key ASC LIMIT 10`)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error", requestID(r))
 		return
