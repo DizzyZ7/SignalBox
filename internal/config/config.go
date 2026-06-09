@@ -4,27 +4,32 @@ import (
 	"errors"
 	"os"
 	"strconv"
+	"time"
 )
 
 type Config struct {
-	HTTPAddr              string
-	DatabaseURL           string
-	AdminAPIKey           string
-	AutoMigrate           bool
-	TelegramBotToken      string
-	TelegramDefaultChatID string
-	MaxBodyBytes          int64
+	HTTPAddr                 string
+	DatabaseURL              string
+	AdminAPIKey              string
+	AutoMigrate              bool
+	TelegramBotToken         string
+	TelegramDefaultChatID    string
+	MaxBodyBytes             int64
+	WebhookRateLimitRequests int
+	WebhookRateLimitWindow   time.Duration
 }
 
 func Load() (Config, error) {
 	cfg := Config{
-		HTTPAddr:              env("HTTP_ADDR", ":8080"),
-		DatabaseURL:           os.Getenv("DATABASE_URL"),
-		AdminAPIKey:           os.Getenv("ADMIN_API_KEY"),
-		AutoMigrate:           envBool("AUTO_MIGRATE", false),
-		TelegramBotToken:      os.Getenv("TELEGRAM_BOT_TOKEN"),
-		TelegramDefaultChatID: os.Getenv("TELEGRAM_DEFAULT_CHAT_ID"),
-		MaxBodyBytes:          envInt64("MAX_BODY_BYTES", 1<<20),
+		HTTPAddr:                 env("HTTP_ADDR", ":8080"),
+		DatabaseURL:              os.Getenv("DATABASE_URL"),
+		AdminAPIKey:              os.Getenv("ADMIN_API_KEY"),
+		AutoMigrate:              envBool("AUTO_MIGRATE", false),
+		TelegramBotToken:         os.Getenv("TELEGRAM_BOT_TOKEN"),
+		TelegramDefaultChatID:    os.Getenv("TELEGRAM_DEFAULT_CHAT_ID"),
+		MaxBodyBytes:             envInt64("MAX_BODY_BYTES", 1<<20),
+		WebhookRateLimitRequests: envInt("WEBHOOK_RATE_LIMIT_REQUESTS", 120),
+		WebhookRateLimitWindow:   envDuration("WEBHOOK_RATE_LIMIT_WINDOW", time.Minute),
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, errors.New("DATABASE_URL is required")
@@ -34,6 +39,12 @@ func Load() (Config, error) {
 	}
 	if cfg.MaxBodyBytes < 1024 || cfg.MaxBodyBytes > 10<<20 {
 		return Config{}, errors.New("MAX_BODY_BYTES must be between 1024 and 10485760")
+	}
+	if cfg.WebhookRateLimitRequests < 0 {
+		return Config{}, errors.New("WEBHOOK_RATE_LIMIT_REQUESTS must not be negative")
+	}
+	if cfg.WebhookRateLimitRequests > 0 && cfg.WebhookRateLimitWindow <= 0 {
+		return Config{}, errors.New("WEBHOOK_RATE_LIMIT_WINDOW must be positive")
 	}
 	return cfg, nil
 }
@@ -57,12 +68,36 @@ func envBool(key string, fallback bool) bool {
 	return parsed
 }
 
+func envInt(key string, fallback int) int {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
 func envInt64(key string, fallback int64) int64 {
 	value := os.Getenv(key)
 	if value == "" {
 		return fallback
 	}
 	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
+func envDuration(key string, fallback time.Duration) time.Duration {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := time.ParseDuration(value)
 	if err != nil {
 		return fallback
 	}
