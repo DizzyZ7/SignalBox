@@ -13,6 +13,7 @@ SignalBox is a production-oriented Go service for receiving webhooks, storing ev
 - Event filters by source, type, origin, duplicate flag and time range
 - Aggregated stats endpoint
 - Optional Telegram notifications
+- Public webhook rate limiting
 - Health and readiness probes
 - Docker and Docker Compose setup
 - JSON structured logs
@@ -61,6 +62,13 @@ curl -X POST http://localhost:8080/v1/hooks/<SOURCE_TOKEN> \
   -d '{"type":"lead.created","source":"landing","contact":"@user"}'
 ```
 
+Public webhooks are rate-limited by IP and source token. Defaults:
+
+```env
+WEBHOOK_RATE_LIMIT_REQUESTS=120
+WEBHOOK_RATE_LIMIT_WINDOW=1m
+```
+
 List events:
 
 ```bash
@@ -85,13 +93,14 @@ curl -X POST http://localhost:8080/v1/sources/<SOURCE_ID>/rotate-token \
 ## Architecture
 
 ```text
-cmd/api          app bootstrap
-internal/config  environment loading
-internal/domain  domain models
-internal/security token/id/hash helpers
-internal/storage PostgreSQL queries and migrations
-internal/delivery Telegram notification delivery
-internal/httpapi HTTP routing and handlers
+cmd/api             app bootstrap
+internal/config     environment loading
+internal/domain     domain models
+internal/security   token/id/hash helpers
+internal/ratelimit  in-memory webhook rate limiter
+internal/storage    PostgreSQL queries and migrations
+internal/delivery   Telegram notification delivery
+internal/httpapi    HTTP routing and handlers
 ```
 
 ## Development
@@ -111,4 +120,4 @@ make build
 
 ## Production notes
 
-Use HTTPS before public exposure, rotate tokens if leaked, keep PostgreSQL backups enabled, and use a long random `ADMIN_API_KEY`.
+Use HTTPS before public exposure, keep webhook rate limits enabled, rotate tokens if leaked, keep PostgreSQL backups enabled, and use a long random `ADMIN_API_KEY`.
