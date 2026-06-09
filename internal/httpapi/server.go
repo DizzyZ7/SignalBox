@@ -15,6 +15,7 @@ import (
 
 	"github.com/DizzyZ7/SignalBox/internal/config"
 	"github.com/DizzyZ7/SignalBox/internal/domain"
+	"github.com/DizzyZ7/SignalBox/internal/ratelimit"
 	"github.com/DizzyZ7/SignalBox/internal/security"
 	"github.com/DizzyZ7/SignalBox/internal/storage"
 )
@@ -24,21 +25,28 @@ type Notifier interface {
 }
 
 type Server struct {
-	cfg      config.Config
-	repo     *storage.Repository
-	notifier Notifier
-	log      *slog.Logger
+	cfg            config.Config
+	repo           *storage.Repository
+	notifier       Notifier
+	log            *slog.Logger
+	webhookLimiter *ratelimit.Limiter
 }
 
 func NewServer(cfg config.Config, repo *storage.Repository, notifier Notifier, log *slog.Logger) *Server {
-	return &Server{cfg: cfg, repo: repo, notifier: notifier, log: log}
+	return &Server{
+		cfg:            cfg,
+		repo:           repo,
+		notifier:       notifier,
+		log:            log,
+		webhookLimiter: ratelimit.New(cfg.WebhookRateLimitRequests, cfg.WebhookRateLimitWindow),
+	}
 }
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.health)
 	mux.HandleFunc("GET /readyz", s.ready)
-	mux.HandleFunc("POST /v1/hooks/{token}", s.receiveWebhook)
+	mux.Handle("POST /v1/hooks/{token}", s.webhookRateLimit(http.HandlerFunc(s.receiveWebhook)))
 	mux.Handle("POST /v1/sources", s.admin(http.HandlerFunc(s.createSource)))
 	mux.Handle("GET /v1/sources", s.admin(http.HandlerFunc(s.listSources)))
 	mux.Handle("PATCH /v1/sources/{id}", s.admin(http.HandlerFunc(s.updateSource)))
@@ -329,6 +337,23 @@ func parseEventFilter(w http.ResponseWriter, r *http.Request) (domain.EventFilte
 		filter.To = &parsed
 	}
 	return filter, true
+}
+
+func (s *Server) webhookRateLimit(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		key := clientIP(r) + ":" + strings.TrimSpace(r.PathValue("token"))
+		allowed, retryAfter := s.webhookLimiter.Allow(key)
+		if !allowed {
+			retrySeconds := int((retryAfter + time.Second - time.Nanosecond) / time.Second)
+			if retrySeconds < 1 {
+				retrySeconds = 1
+			}
+			w.Header().Set("Retry-After", strconv.Itoa(retrySeconds))
+			writeError(w, http.StatusTooManyRequests, "rate limit exceeded", requestID(r))
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) admin(next http.Handler) http.Handler {
