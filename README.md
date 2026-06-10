@@ -11,9 +11,11 @@ SignalBox is a production-oriented Go service for receiving webhooks, storing ev
 - PostgreSQL event storage
 - Duplicate detection without losing audit records
 - Event filters by source, type, origin, duplicate flag and time range
-- Aggregated stats endpoint
+- Aggregated stats endpoint with delivery queue counters
 - Optional Telegram notifications
 - Postgres-backed delivery queue with retry/backoff
+- Manual retry endpoint for failed delivery jobs
+- OpenAPI 3.0 specification
 - Public webhook rate limiting
 - Health and readiness probes
 - Docker and Docker Compose setup
@@ -87,6 +89,13 @@ curl "http://localhost:8080/v1/events?type=lead.created&duplicate=false" \
   -H "X-API-Key: <ADMIN_API_KEY>"
 ```
 
+List failed deliveries:
+
+```bash
+curl "http://localhost:8080/v1/deliveries?status=failed&channel=telegram" \
+  -H "X-API-Key: <ADMIN_API_KEY>"
+```
+
 Get stats:
 
 ```bash
@@ -126,6 +135,7 @@ make build
 ## Documentation
 
 - [API](docs/API.md)
+- [OpenAPI](docs/openapi.yaml)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Deployment](docs/DEPLOY.md)
 
