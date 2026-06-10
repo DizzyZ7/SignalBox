@@ -24,14 +24,14 @@ docker pull ghcr.io/dizzyz7/signalbox:latest
 Versioned releases use semver tags:
 
 ```bash
-docker pull ghcr.io/dizzyz7/signalbox:v0.9.0
+docker pull ghcr.io/dizzyz7/signalbox:v0.9.1
 ```
 
 To publish a new image, create and push a version tag:
 
 ```bash
-git tag v0.9.0
-git push origin v0.9.0
+git tag v0.9.1
+git push origin v0.9.1
 ```
 
 The `Docker image` GitHub Actions workflow builds the image and pushes both the version tag and `latest` to GHCR.
