@@ -24,8 +24,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctx := context.Background()
-	pool, err := storage.Connect(ctx, cfg.DatabaseURL)
+	appCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	pool, err := storage.Connect(appCtx, cfg.DatabaseURL)
 	if err != nil {
 		logger.Error("database connection failed", slog.String("error", err.Error()))
 		os.Exit(1)
@@ -34,15 +36,18 @@ func main() {
 
 	repo := storage.New(pool)
 	if cfg.AutoMigrate {
-		if err := repo.Migrate(ctx); err != nil {
+		if err := repo.Migrate(appCtx); err != nil {
 			logger.Error("migration failed", slog.String("error", err.Error()))
 			os.Exit(1)
 		}
 	}
 
-	notifier := delivery.NewTelegramNotifier(cfg.TelegramBotToken, cfg.TelegramDefaultChatID, repo, logger)
-	api := httpapi.NewServer(cfg, repo, notifier, logger)
+	notifier := delivery.NewTelegramNotifier(cfg.TelegramBotToken, cfg.TelegramDefaultChatID, repo, logger, cfg.DeliveryMaxAttempts)
+	if cfg.DeliveryWorkerEnabled {
+		notifier.Start(appCtx, cfg.DeliveryWorkerInterval, cfg.DeliveryWorkerBatchSize, cfg.DeliveryWorkerLockDuration)
+	}
 
+	api := httpapi.NewServer(cfg, repo, notifier, logger)
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           api.Handler(),
@@ -58,16 +63,14 @@ func main() {
 		errs <- server.ListenAndServe()
 	}()
 
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	select {
 	case err := <-errs:
 		if err != nil && err != http.ErrServerClosed {
 			logger.Error("server failed", slog.String("error", err.Error()))
 			os.Exit(1)
 		}
-	case sig := <-stop:
-		logger.Info("shutdown requested", slog.String("signal", sig.String()))
+	case <-appCtx.Done():
+		logger.Info("shutdown requested")
 	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
