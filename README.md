@@ -1,6 +1,6 @@
 # SignalBox
 
-SignalBox is a production-oriented Go service for receiving webhooks, storing events in PostgreSQL, detecting duplicate payloads, forwarding new events to Telegram, and managing webhook sources through an admin API.
+SignalBox is a production-oriented Go service for receiving webhooks, storing events in PostgreSQL, detecting duplicate payloads, forwarding new events to Telegram through a durable delivery queue, and managing webhook sources through an admin API.
 
 ## Features
 
@@ -13,6 +13,7 @@ SignalBox is a production-oriented Go service for receiving webhooks, storing ev
 - Event filters by source, type, origin, duplicate flag and time range
 - Aggregated stats endpoint
 - Optional Telegram notifications
+- Postgres-backed delivery queue with retry/backoff
 - Public webhook rate limiting
 - Health and readiness probes
 - Docker and Docker Compose setup
@@ -23,7 +24,7 @@ SignalBox is a production-oriented Go service for receiving webhooks, storing ev
 
 ## Stack
 
-- Go 1.23
+- Go 1.25
 - PostgreSQL 16
 - pgx
 - Docker
@@ -69,6 +70,16 @@ WEBHOOK_RATE_LIMIT_REQUESTS=120
 WEBHOOK_RATE_LIMIT_WINDOW=1m
 ```
 
+Telegram delivery is queued and retried by a background worker. Defaults:
+
+```env
+DELIVERY_WORKER_ENABLED=true
+DELIVERY_WORKER_INTERVAL=5s
+DELIVERY_WORKER_BATCH_SIZE=10
+DELIVERY_WORKER_LOCK_DURATION=1m
+DELIVERY_MAX_ATTEMPTS=8
+```
+
 List events:
 
 ```bash
@@ -98,8 +109,8 @@ internal/config     environment loading
 internal/domain     domain models
 internal/security   token/id/hash helpers
 internal/ratelimit  in-memory webhook rate limiter
-internal/storage    PostgreSQL queries and migrations
-internal/delivery   Telegram notification delivery
+internal/storage    PostgreSQL queries, migrations and delivery queue
+internal/delivery   Telegram delivery queue producer and worker
 internal/httpapi    HTTP routing and handlers
 ```
 
@@ -120,4 +131,4 @@ make build
 
 ## Production notes
 
-Use HTTPS before public exposure, keep webhook rate limits enabled, rotate tokens if leaked, keep PostgreSQL backups enabled, and use a long random `ADMIN_API_KEY`.
+Use HTTPS before public exposure, keep webhook rate limits enabled, rotate tokens if leaked, keep PostgreSQL backups enabled, keep the delivery worker enabled for Telegram notifications, and use a long random `ADMIN_API_KEY`.
