@@ -152,14 +152,14 @@ make build
 Create a version tag to publish a Docker image to GHCR:
 
 ```bash
-git tag v0.9.0
-git push origin v0.9.0
+git tag v0.9.1
+git push origin v0.9.1
 ```
 
 The workflow publishes:
 
 ```text
-ghcr.io/dizzyz7/signalbox:v0.9.0
+ghcr.io/dizzyz7/signalbox:v0.9.1
 ghcr.io/dizzyz7/signalbox:latest
 ```
 
