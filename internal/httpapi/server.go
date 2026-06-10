@@ -298,6 +298,12 @@ func (s *Server) stats(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal error", requestID(r))
 		return
 	}
+	deliveryStats, err := s.repo.DeliveryStats(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error", requestID(r))
+		return
+	}
+	stats.Deliveries = deliveryStats
 	writeJSON(w, http.StatusOK, stats)
 }
 
