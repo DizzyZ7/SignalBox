@@ -149,9 +149,9 @@ func (n *TelegramNotifier) deliver(ctx context.Context, job domain.DeliveryJob) 
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	if err := n.store.MarkDeliveryJobSent(ctx, job.ID); err != nil {
+	markCtx, markCancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer markCancel()
+	if err := n.store.MarkDeliveryJobSent(markCtx, job.ID); err != nil {
 		n.log.Error("mark delivery job sent failed", slog.Int64("job_id", job.ID), slog.String("error", err.Error()))
 		return
 	}
