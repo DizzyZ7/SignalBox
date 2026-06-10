@@ -65,7 +65,7 @@ func (r *Repository) ClaimDeliveryJobs(ctx context.Context, workerID string, lim
 	}
 	rows, err := r.pool.Query(ctx, `
 		UPDATE delivery_jobs
-		SET status = 'processing', locked_by = $1, locked_until = NOW() + ($2::TEXT)::INTERVAL, updated_at = NOW()
+		SET status = 'processing', locked_by = $1, locked_until = NOW() + make_interval(secs => $2::int), updated_at = NOW()
 		WHERE id IN (
 			SELECT id
 			FROM delivery_jobs
@@ -78,7 +78,7 @@ func (r *Repository) ClaimDeliveryJobs(ctx context.Context, workerID string, lim
 			FOR UPDATE SKIP LOCKED
 		)
 		RETURNING id, public_id, event_id, channel, destination, payload, status, attempts, max_attempts, next_attempt_at, locked_until, locked_by, last_error, created_at, updated_at, sent_at
-	`, workerID, lockFor.String(), limit)
+	`, workerID, durationSeconds(lockFor), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -118,13 +118,13 @@ func (r *Repository) MarkDeliveryJobFailed(ctx context.Context, jobID int64, err
 		UPDATE delivery_jobs
 		SET attempts = attempts + 1,
 		    status = CASE WHEN attempts + 1 >= max_attempts THEN 'failed' ELSE 'pending' END,
-		    next_attempt_at = CASE WHEN attempts + 1 >= max_attempts THEN next_attempt_at ELSE NOW() + ($2::TEXT)::INTERVAL END,
+		    next_attempt_at = CASE WHEN attempts + 1 >= max_attempts THEN next_attempt_at ELSE NOW() + make_interval(secs => $2::int) END,
 		    locked_until = NULL,
 		    locked_by = NULL,
 		    last_error = $3,
 		    updated_at = NOW()
 		WHERE id = $1 AND status = 'processing'
-	`, jobID, retryAfter.String(), errText)
+	`, jobID, durationSeconds(retryAfter), errText)
 	if err != nil {
 		return err
 	}
@@ -166,6 +166,14 @@ func scanDeliveryJob(row scanner) (domain.DeliveryJob, error) {
 	job.LastError = nullStringPtr(lastError)
 	job.SentAt = nullTimePtr(sentAt)
 	return job, nil
+}
+
+func durationSeconds(value time.Duration) int {
+	seconds := int(value.Seconds())
+	if seconds < 1 {
+		return 1
+	}
+	return seconds
 }
 
 func nullTimePtr(value sql.NullTime) *time.Time {
