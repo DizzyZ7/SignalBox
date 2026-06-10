@@ -20,6 +20,7 @@ SignalBox is a production-oriented Go service for receiving webhooks, storing ev
 - Public webhook rate limiting
 - Health and readiness probes
 - Docker and Docker Compose setup
+- GHCR image publishing workflow
 - JSON structured logs
 - Graceful shutdown
 - GitHub Actions CI
@@ -38,6 +39,12 @@ SignalBox is a production-oriented Go service for receiving webhooks, storing ev
 cp .env.example .env
 # edit ADMIN_API_KEY in .env
 docker compose --env-file .env up --build
+```
+
+Released Docker images are published to GHCR:
+
+```bash
+docker pull ghcr.io/dizzyz7/signalbox:latest
 ```
 
 Check API:
@@ -138,6 +145,22 @@ make fmt
 make test
 make vet
 make build
+```
+
+## Releases
+
+Create a version tag to publish a Docker image to GHCR:
+
+```bash
+git tag v0.9.0
+git push origin v0.9.0
+```
+
+The workflow publishes:
+
+```text
+ghcr.io/dizzyz7/signalbox:v0.9.0
+ghcr.io/dizzyz7/signalbox:latest
 ```
 
 ## Documentation
