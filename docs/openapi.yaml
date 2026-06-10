@@ -1,0 +1,571 @@
+openapi: 3.0.3
+info:
+  title: SignalBox API
+  version: 0.7.0
+  description: Production-oriented webhook ingestion API with PostgreSQL storage, deduplication, rate limiting, durable Telegram delivery queue and admin operations.
+servers:
+  - url: http://localhost:8080
+security:
+  - AdminApiKey: []
+paths:
+  /healthz:
+    get:
+      summary: Health check
+      security: []
+      responses:
+        '200':
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /readyz:
+    get:
+      summary: Readiness check
+      security: []
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Database is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v1/hooks/{token}:
+    post:
+      summary: Receive webhook event
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+            example:
+              type: lead.created
+              source: landing
+              external_id: lead-1001
+              contact: '@user'
+      responses:
+        '202':
+          description: Event accepted and stored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        '400':
+          description: Invalid payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Source not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '415':
+          description: Unsupported media type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Webhook rate limit exceeded
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Seconds until retry is allowed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v1/sources:
+    post:
+      summary: Create webhook source
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSourceRequest'
+      responses:
+        '201':
+          description: Source created. Token is returned only once.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Source'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      summary: List webhook sources
+      parameters:
+        - name: active
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Source list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Source'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v1/sources/{id}:
+    patch:
+      summary: Update webhook source
+      parameters:
+        - $ref: '#/components/parameters/PublicID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSourceRequest'
+      responses:
+        '200':
+          description: Source updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Source'
+        '404':
+          description: Source not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: Disable webhook source
+      parameters:
+        - $ref: '#/components/parameters/PublicID'
+      responses:
+        '204':
+          description: Source disabled
+        '404':
+          description: Source not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v1/sources/{id}/rotate-token:
+    post:
+      summary: Rotate source webhook token
+      parameters:
+        - $ref: '#/components/parameters/PublicID'
+      responses:
+        '200':
+          description: New source token returned once
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Source'
+        '404':
+          description: Source not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v1/events:
+    get:
+      summary: List events
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+        - name: source
+          in: query
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+        - name: event_type
+          in: query
+          schema:
+            type: string
+        - name: origin
+          in: query
+          schema:
+            type: string
+        - name: duplicate
+          in: query
+          schema:
+            type: boolean
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Event list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Event'
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+  /v1/events/{id}:
+    get:
+      summary: Get event by public id
+      parameters:
+        - $ref: '#/components/parameters/PublicID'
+      responses:
+        '200':
+          description: Event found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        '404':
+          description: Event not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v1/deliveries:
+    get:
+      summary: List delivery jobs
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, processing, sent, failed]
+        - name: channel
+          in: query
+          schema:
+            type: string
+            example: telegram
+      responses:
+        '200':
+          description: Delivery job list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DeliveryJob'
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+  /v1/deliveries/{id}:
+    get:
+      summary: Get delivery job by public id
+      parameters:
+        - $ref: '#/components/parameters/PublicID'
+      responses:
+        '200':
+          description: Delivery job found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryJob'
+        '404':
+          description: Delivery job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v1/deliveries/{id}/retry:
+    post:
+      summary: Retry failed or pending delivery job immediately
+      parameters:
+        - $ref: '#/components/parameters/PublicID'
+      responses:
+        '200':
+          description: Delivery job scheduled for retry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryJob'
+        '404':
+          description: Delivery job not found or not retryable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v1/stats:
+    get:
+      summary: Get aggregate service stats
+      responses:
+        '200':
+          description: Stats response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatsResponse'
+components:
+  securitySchemes:
+    AdminApiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  parameters:
+    PublicID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    Offset:
+      name: offset
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        request_id:
+          type: string
+    CreateSourceRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        telegram_chat_id:
+          type: string
+          nullable: true
+    UpdateSourceRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        telegram_chat_id:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+    Source:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        token_hint:
+          type: string
+        telegram_chat_id:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        token:
+          type: string
+          description: Returned only on source creation and token rotation.
+    Event:
+      type: object
+      properties:
+        id:
+          type: string
+        source:
+          $ref: '#/components/schemas/Source'
+        event_type:
+          type: string
+          nullable: true
+        origin:
+          type: string
+          nullable: true
+        external_id:
+          type: string
+          nullable: true
+        payload:
+          type: object
+          additionalProperties: true
+        payload_hash:
+          type: string
+        ip:
+          type: string
+          nullable: true
+        user_agent:
+          type: string
+          nullable: true
+        is_duplicate:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+    DeliveryJob:
+      type: object
+      properties:
+        id:
+          type: string
+        event_id:
+          type: integer
+          format: int64
+        channel:
+          type: string
+        destination:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+          enum: [pending, processing, sent, failed]
+        attempts:
+          type: integer
+        max_attempts:
+          type: integer
+        next_attempt_at:
+          type: string
+          format: date-time
+        locked_until:
+          type: string
+          format: date-time
+          nullable: true
+        locked_by:
+          type: string
+          nullable: true
+        last_error:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        sent_at:
+          type: string
+          format: date-time
+          nullable: true
+    StatRow:
+      type: object
+      properties:
+        key:
+          type: string
+        count:
+          type: integer
+          format: int64
+    DeliveryStats:
+      type: object
+      properties:
+        pending:
+          type: integer
+          format: int64
+        processing:
+          type: integer
+          format: int64
+        sent:
+          type: integer
+          format: int64
+        failed:
+          type: integer
+          format: int64
+    StatsResponse:
+      type: object
+      properties:
+        total_events:
+          type: integer
+          format: int64
+        unique_events:
+          type: integer
+          format: int64
+        duplicate_events:
+          type: integer
+          format: int64
+        events_24h:
+          type: integer
+          format: int64
+        sources:
+          type: integer
+          format: int64
+        active_sources:
+          type: integer
+          format: int64
+        deliveries:
+          $ref: '#/components/schemas/DeliveryStats'
+        by_type:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatRow'
+        by_origin:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatRow'
