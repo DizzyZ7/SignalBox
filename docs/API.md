@@ -12,6 +12,8 @@ Admin endpoints require this header:
 X-API-Key: <ADMIN_API_KEY>
 ```
 
+OpenAPI specification is available in [`docs/openapi.yaml`](openapi.yaml).
+
 ## Health
 
 ```http
@@ -244,6 +246,12 @@ Response:
   "events_24h": 12,
   "sources": 3,
   "active_sources": 2,
+  "deliveries": {
+    "pending": 3,
+    "processing": 1,
+    "sent": 120,
+    "failed": 2
+  },
   "by_type": [{"key":"lead.created","count":80}],
   "by_origin": [{"key":"landing","count":70}]
 }
