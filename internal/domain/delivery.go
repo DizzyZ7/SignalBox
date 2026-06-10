@@ -23,3 +23,10 @@ type DeliveryJob struct {
 	UpdatedAt     time.Time       `json:"updated_at"`
 	SentAt        *time.Time      `json:"sent_at,omitempty"`
 }
+
+type DeliveryJobFilter struct {
+	Limit   int
+	Offset  int
+	Status  string
+	Channel string
+}
