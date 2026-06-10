@@ -172,7 +172,14 @@ Response:
 ## List events
 
 ```http
-GET /v1/events?limit=50&offset=0&source=<SOURCE_ID>&type=lead.created&origin=landing&duplicate=false&from=2026-06-09T00:00:00Z&to=2026-06-10T00:00:00Z
+GET /v1/events?limit=50&source=<SOURCE_ID>&type=lead.created&origin=landing&duplicate=false&from=2026-06-09T00:00:00Z&to=2026-06-10T00:00:00Z
+X-API-Key: <ADMIN_API_KEY>
+```
+
+Use the returned `next_cursor` for the next page:
+
+```http
+GET /v1/events?limit=50&cursor=<NEXT_CURSOR>
 X-API-Key: <ADMIN_API_KEY>
 ```
 
@@ -181,7 +188,8 @@ Query params:
 | Param | Type | Description |
 | --- | --- | --- |
 | `limit` | integer | Page size, capped at 200 |
-| `offset` | integer | Offset pagination |
+| `cursor` | string | Cursor returned as `next_cursor` by previous response |
+| `offset` | integer | Legacy offset pagination, ignored when cursor is present |
 | `source` | string | Source public ID |
 | `type` | string | Event type alias |
 | `event_type` | string | Event type |
@@ -189,6 +197,17 @@ Query params:
 | `duplicate` | boolean | Duplicate flag |
 | `from` | RFC3339 | Created at lower bound |
 | `to` | RFC3339 | Created at upper bound |
+
+Response includes `next_cursor`:
+
+```json
+{
+  "items": [],
+  "limit": 50,
+  "offset": 0,
+  "next_cursor": "opaque-cursor"
+}
+```
 
 ## Get event
 
