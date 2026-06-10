@@ -65,7 +65,7 @@ func (r *Repository) ClaimDeliveryJobs(ctx context.Context, workerID string, lim
 	}
 	rows, err := r.pool.Query(ctx, `
 		UPDATE delivery_jobs
-		SET status = 'processing', locked_by = $1, locked_until = NOW() + make_interval(secs => $2::int), updated_at = NOW()
+		SET status = 'processing', locked_by = $1, locked_until = NOW() + ($2 * INTERVAL '1 second'), updated_at = NOW()
 		WHERE id IN (
 			SELECT id
 			FROM delivery_jobs
@@ -118,7 +118,7 @@ func (r *Repository) MarkDeliveryJobFailed(ctx context.Context, jobID int64, err
 		UPDATE delivery_jobs
 		SET attempts = attempts + 1,
 		    status = CASE WHEN attempts + 1 >= max_attempts THEN 'failed' ELSE 'pending' END,
-		    next_attempt_at = CASE WHEN attempts + 1 >= max_attempts THEN next_attempt_at ELSE NOW() + make_interval(secs => $2::int) END,
+		    next_attempt_at = CASE WHEN attempts + 1 >= max_attempts THEN next_attempt_at ELSE NOW() + ($2 * INTERVAL '1 second') END,
 		    locked_until = NULL,
 		    locked_by = NULL,
 		    last_error = $3,
