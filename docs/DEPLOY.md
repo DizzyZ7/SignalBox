@@ -1,6 +1,6 @@
 # Deployment
 
-## VPS deployment
+## VPS deployment from source
 
 1. Install Docker and Docker Compose plugin.
 2. Clone repository.
@@ -12,6 +12,29 @@
 ```bash
 docker compose --env-file .env up -d --build
 ```
+
+## GHCR image deployment
+
+Released images are published to GitHub Container Registry:
+
+```bash
+docker pull ghcr.io/dizzyz7/signalbox:latest
+```
+
+Versioned releases use semver tags:
+
+```bash
+docker pull ghcr.io/dizzyz7/signalbox:v0.9.0
+```
+
+To publish a new image, create and push a version tag:
+
+```bash
+git tag v0.9.0
+git push origin v0.9.0
+```
+
+The `Docker image` GitHub Actions workflow builds the image and pushes both the version tag and `latest` to GHCR.
 
 ## Reverse proxy
 
