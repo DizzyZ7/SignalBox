@@ -195,6 +195,38 @@ GET /v1/events/<EVENT_ID>
 X-API-Key: <ADMIN_API_KEY>
 ```
 
+## List delivery jobs
+
+```http
+GET /v1/deliveries?status=failed&channel=telegram&limit=50&offset=0
+X-API-Key: <ADMIN_API_KEY>
+```
+
+Query params:
+
+| Param | Type | Description |
+| --- | --- | --- |
+| `limit` | integer | Page size, capped at 200 |
+| `offset` | integer | Offset pagination |
+| `status` | string | Optional `pending`, `processing`, `sent`, `failed` |
+| `channel` | string | Optional delivery channel, for example `telegram` |
+
+## Get delivery job
+
+```http
+GET /v1/deliveries/<DELIVERY_ID>
+X-API-Key: <ADMIN_API_KEY>
+```
+
+## Retry delivery job
+
+```http
+POST /v1/deliveries/<DELIVERY_ID>/retry
+X-API-Key: <ADMIN_API_KEY>
+```
+
+This returns a `failed` or already `pending` job back to `pending`, clears lock/error fields, and schedules it for immediate retry.
+
 ## Stats
 
 ```http
@@ -233,5 +265,6 @@ Response:
 - Keep source tokens private.
 - Put the service behind a reverse proxy with body size limits.
 - Keep webhook rate limits enabled for public deployments.
+- Keep delivery worker enabled when Telegram notifications are needed.
 - Use external PostgreSQL backups.
 - Set `AUTO_MIGRATE=false` when migrations are managed by deployment tooling.
