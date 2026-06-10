@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
   title: SignalBox API
-  version: 0.7.0
-  description: Production-oriented webhook ingestion API with PostgreSQL storage, deduplication, rate limiting, durable Telegram delivery queue and admin operations.
+  version: 0.8.0
+  description: Production-oriented webhook ingestion API with PostgreSQL storage, deduplication, rate limiting, cursor pagination, durable Telegram delivery queue and admin operations.
 servers:
   - url: http://localhost:8080
 security:
@@ -206,9 +206,11 @@ paths:
   /v1/events:
     get:
       summary: List events
+      description: Supports legacy offset pagination and cursor-based keyset pagination. Use next_cursor from the previous response as cursor for the next page.
       parameters:
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/Cursor'
         - name: source
           in: query
           schema:
@@ -255,6 +257,15 @@ paths:
                     type: integer
                   offset:
                     type: integer
+                  next_cursor:
+                    type: string
+                    nullable: true
+        '400':
+          description: Invalid cursor or filter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /v1/events/{id}:
     get:
       summary: Get event by public id
@@ -381,6 +392,14 @@ components:
         type: integer
         minimum: 0
         default: 0
+      description: Legacy offset pagination. Ignored when cursor is provided.
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Cursor returned as next_cursor by the previous /v1/events response.
   schemas:
     HealthResponse:
       type: object
