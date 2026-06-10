@@ -6,7 +6,7 @@
 2. Clone repository.
 3. Create `.env` from `.env.example`.
 4. Set a long random `ADMIN_API_KEY`.
-5. Review webhook rate limit settings.
+5. Review webhook rate limit and delivery worker settings.
 6. Start services:
 
 ```bash
@@ -43,12 +43,28 @@ Set `WEBHOOK_RATE_LIMIT_REQUESTS=0` only for trusted internal deployments.
 
 For multi-replica deployments, the built-in limiter is per replica. Use sticky sessions or replace it with Redis-backed distributed rate limiting when strict global limits are required.
 
+## Delivery worker
+
+Telegram notifications are stored in `delivery_jobs` and processed by a background worker.
+
+Default values:
+
+```env
+DELIVERY_WORKER_ENABLED=true
+DELIVERY_WORKER_INTERVAL=5s
+DELIVERY_WORKER_BATCH_SIZE=10
+DELIVERY_WORKER_LOCK_DURATION=1m
+DELIVERY_MAX_ATTEMPTS=8
+```
+
+If Telegram is down, jobs stay in Postgres and are retried with backoff until they are sent or reach `DELIVERY_MAX_ATTEMPTS`.
+
 ## Backups
 
-PostgreSQL volume is named `signalbox_pgdata`. For production, use external backups or managed PostgreSQL.
+PostgreSQL volume is named `signalbox_pgdata`. For production, use external backups or managed PostgreSQL. Backups now protect both events and pending delivery jobs.
 
 ## Scaling
 
 Multiple API replicas can run behind a load balancer. Deduplication is safe because PostgreSQL enforces the `(source_id, payload_hash)` primary key in `event_dedup_keys`.
 
-Telegram notifications are fire-and-forget in the API process. For guaranteed delivery, move delivery to a background worker with retries.
+Delivery workers claim jobs with row locks and `FOR UPDATE SKIP LOCKED`, so several replicas can process the queue without taking the same job at the same time. For very high delivery throughput, replace the Postgres-backed queue with Redis, NATS or RabbitMQ.
