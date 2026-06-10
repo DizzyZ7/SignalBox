@@ -54,6 +54,9 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /v1/sources/{id}/rotate-token", s.admin(http.HandlerFunc(s.rotateSourceToken)))
 	mux.Handle("GET /v1/events", s.admin(http.HandlerFunc(s.listEvents)))
 	mux.Handle("GET /v1/events/{id}", s.admin(http.HandlerFunc(s.getEvent)))
+	mux.Handle("GET /v1/deliveries", s.admin(http.HandlerFunc(s.listDeliveries)))
+	mux.Handle("GET /v1/deliveries/{id}", s.admin(http.HandlerFunc(s.getDelivery)))
+	mux.Handle("POST /v1/deliveries/{id}/retry", s.admin(http.HandlerFunc(s.retryDelivery)))
 	mux.Handle("GET /v1/stats", s.admin(http.HandlerFunc(s.stats)))
 	return s.accessLog(s.recover(s.requestID(mux)))
 }
