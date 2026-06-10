@@ -2,8 +2,8 @@ FROM golang:1.25-alpine AS builder
 WORKDIR /src
 RUN apk add --no-cache ca-certificates git
 COPY go.mod ./
-RUN go mod download
 COPY . .
+RUN go mod tidy
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w' -o /out/signalbox ./cmd/api
 
 FROM alpine:3.21
