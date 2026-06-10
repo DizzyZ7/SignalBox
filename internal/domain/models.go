@@ -39,15 +39,23 @@ type StatRow struct {
 	Count int64  `json:"count"`
 }
 
+type DeliveryStats struct {
+	Pending    int64 `json:"pending"`
+	Processing int64 `json:"processing"`
+	Sent       int64 `json:"sent"`
+	Failed     int64 `json:"failed"`
+}
+
 type StatsResponse struct {
-	TotalEvents     int64     `json:"total_events"`
-	UniqueEvents    int64     `json:"unique_events"`
-	DuplicateEvents int64     `json:"duplicate_events"`
-	Events24h       int64     `json:"events_24h"`
-	Sources         int64     `json:"sources"`
-	ActiveSources   int64     `json:"active_sources"`
-	ByType          []StatRow `json:"by_type"`
-	ByOrigin        []StatRow `json:"by_origin"`
+	TotalEvents     int64         `json:"total_events"`
+	UniqueEvents    int64         `json:"unique_events"`
+	DuplicateEvents int64         `json:"duplicate_events"`
+	Events24h       int64         `json:"events_24h"`
+	Sources         int64         `json:"sources"`
+	ActiveSources   int64         `json:"active_sources"`
+	Deliveries      DeliveryStats `json:"deliveries"`
+	ByType          []StatRow     `json:"by_type"`
+	ByOrigin        []StatRow     `json:"by_origin"`
 }
 
 type EventFilter struct {
