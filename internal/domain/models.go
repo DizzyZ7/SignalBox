@@ -59,12 +59,14 @@ type StatsResponse struct {
 }
 
 type EventFilter struct {
-	Limit     int
-	Offset    int
-	Source    string
-	EventType string
-	Origin    string
-	Duplicate *bool
-	From      *time.Time
-	To        *time.Time
+	Limit           int
+	Offset          int
+	Source          string
+	EventType       string
+	Origin          string
+	Duplicate       *bool
+	From            *time.Time
+	To              *time.Time
+	CursorCreatedAt *time.Time
+	CursorID        int64
 }
