@@ -84,6 +84,8 @@ func (s *Server) createSource(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Name           string  `json:"name"`
 		TelegramChatID *string `json:"telegram_chat_id"`
+		ForwardURL     *string `json:"forward_url"`
+		ForwardHMACKey *string `json:"forward_hmac_key"`
 	}
 
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64*1024)).Decode(&input); err != nil {
@@ -97,13 +99,18 @@ func (s *Server) createSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	forwardURL, ok := normalizeForwardURL(w, r, input.ForwardURL)
+	if !ok {
+		return
+	}
+
 	token, err := security.RandomToken()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "token generation failed", requestID(r))
 		return
 	}
 
-	source, err := s.repo.CreateSource(r.Context(), name, normalizePtr(input.TelegramChatID), token)
+	source, err := s.repo.CreateSource(r.Context(), name, normalizePtr(input.TelegramChatID), forwardURL, normalizePtr(input.ForwardHMACKey), token)
 	if err != nil {
 		s.log.Error("create source failed", slog.String("error", err.Error()))
 		writeError(w, http.StatusInternalServerError, "internal error", requestID(r))
@@ -144,6 +151,8 @@ func (s *Server) updateSource(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Name           *string `json:"name"`
 		TelegramChatID *string `json:"telegram_chat_id"`
+		ForwardURL     *string `json:"forward_url"`
+		ForwardHMACKey *string `json:"forward_hmac_key"`
 		IsActive       *bool   `json:"is_active"`
 	}
 
@@ -152,7 +161,7 @@ func (s *Server) updateSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if input.Name == nil && input.TelegramChatID == nil && input.IsActive == nil {
+	if input.Name == nil && input.TelegramChatID == nil && input.ForwardURL == nil && input.ForwardHMACKey == nil && input.IsActive == nil {
 		writeError(w, http.StatusBadRequest, "at least one field is required", requestID(r))
 		return
 	}
@@ -181,12 +190,26 @@ func (s *Server) updateSource(w http.ResponseWriter, r *http.Request) {
 		chat = normalizePtr(input.TelegramChatID)
 	}
 
+	forwardURL := current.ForwardURL
+	if input.ForwardURL != nil {
+		var ok bool
+		forwardURL, ok = normalizeForwardURL(w, r, input.ForwardURL)
+		if !ok {
+			return
+		}
+	}
+
+	forwardHMACKey := current.ForwardHMACKey
+	if input.ForwardHMACKey != nil {
+		forwardHMACKey = normalizePtr(input.ForwardHMACKey)
+	}
+
 	active := current.IsActive
 	if input.IsActive != nil {
 		active = *input.IsActive
 	}
 
-	out, err := s.repo.UpdateSource(r.Context(), id, name, chat, active)
+	out, err := s.repo.UpdateSource(r.Context(), id, name, chat, forwardURL, forwardHMACKey, active)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error", requestID(r))
 		return
@@ -542,6 +565,25 @@ func normalizePtr(value *string) *string {
 		return nil
 	}
 	return stringPtr(*value)
+}
+
+func normalizeForwardURL(w http.ResponseWriter, r *http.Request, value *string) (*string, bool) {
+	if value == nil {
+		return nil, true
+	}
+	trimmed := strings.TrimSpace(*value)
+	if trimmed == "" {
+		return nil, true
+	}
+	if len(trimmed) > 2000 {
+		writeError(w, http.StatusBadRequest, "forward_url must be shorter than 2000 characters", requestID(r))
+		return nil, false
+	}
+	if !strings.HasPrefix(trimmed, "https://") && !strings.HasPrefix(trimmed, "http://") {
+		writeError(w, http.StatusBadRequest, "forward_url must start with http:// or https://", requestID(r))
+		return nil, false
+	}
+	return &trimmed, true
 }
 
 func stringPtr(value string) *string {
