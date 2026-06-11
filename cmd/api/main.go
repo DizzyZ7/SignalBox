@@ -48,9 +48,10 @@ func main() {
 	}
 
 	api := httpapi.NewServer(cfg, repo, notifier, logger)
+	handler := httpapi.WithMetrics(httpapi.WithAdminUI(api.Handler()), repo)
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           httpapi.WithAdminUI(api.Handler()),
+		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      20 * time.Second,
