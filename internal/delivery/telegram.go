@@ -3,12 +3,16 @@ package delivery
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html"
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -22,6 +26,7 @@ type DeliveryStore interface {
 	MarkDeliveryJobSent(ctx context.Context, jobID int64) error
 	MarkDeliveryJobFailed(ctx context.Context, jobID int64, errText string, retryAfter time.Duration) error
 	RecordDeliveryAttempt(ctx context.Context, eventID int64, channel, status string, errText *string)
+	GetEventByInternalID(ctx context.Context, eventID int64) (domain.Event, error)
 }
 
 type TelegramNotifier struct {
@@ -40,7 +45,7 @@ func NewTelegramNotifier(botToken, defaultChatID string, store DeliveryStore, lo
 	return &TelegramNotifier{
 		botToken:      strings.TrimSpace(botToken),
 		defaultChatID: strings.TrimSpace(defaultChatID),
-		client:        &http.Client{Timeout: 8 * time.Second},
+		client:        &http.Client{Timeout: 10 * time.Second},
 		store:         store,
 		log:           log,
 		maxAttempts:   maxAttempts,
@@ -48,22 +53,38 @@ func NewTelegramNotifier(botToken, defaultChatID string, store DeliveryStore, lo
 }
 
 func (n *TelegramNotifier) Enabled() bool {
-	return n != nil && n.botToken != "" && n.store != nil
+	return n != nil && n.store != nil
 }
 
 func (n *TelegramNotifier) CanNotify(source domain.Source) bool {
-	if !n.Enabled() {
+	if n == nil {
 		return false
 	}
-	return n.chatIDFor(source) != ""
+	return n.canTelegramNotify(source) || n.canHTTPForward(source)
+}
+
+func (n *TelegramNotifier) canTelegramNotify(source domain.Source) bool {
+	return n != nil && n.botToken != "" && n.store != nil && n.chatIDFor(source) != ""
+}
+
+func (n *TelegramNotifier) canHTTPForward(source domain.Source) bool {
+	return n != nil && n.store != nil && source.ForwardURL != nil && strings.TrimSpace(*source.ForwardURL) != ""
 }
 
 func (n *TelegramNotifier) Notify(event domain.Event, source domain.Source) {
-	if !n.CanNotify(source) {
+	if n == nil || n.store == nil {
 		return
 	}
-	chatID := n.chatIDFor(source)
+	if n.canTelegramNotify(source) {
+		n.enqueueTelegram(event, source)
+	}
+	if n.canHTTPForward(source) {
+		n.enqueueHTTP(event, source)
+	}
+}
 
+func (n *TelegramNotifier) enqueueTelegram(event domain.Event, source domain.Source) {
+	chatID := n.chatIDFor(source)
 	text := formatTelegramMessage(event, source)
 	body, err := json.Marshal(map[string]any{"chat_id": chatID, "text": text, "parse_mode": "HTML", "disable_web_page_preview": true})
 	if err != nil {
@@ -78,6 +99,18 @@ func (n *TelegramNotifier) Notify(event domain.Event, source domain.Source) {
 		return
 	}
 	n.store.RecordDeliveryAttempt(context.Background(), event.ID, "telegram", "queued", nil)
+}
+
+func (n *TelegramNotifier) enqueueHTTP(event domain.Event, source domain.Source) {
+	destination := strings.TrimSpace(*source.ForwardURL)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := n.store.EnqueueDeliveryJob(ctx, event.ID, "http", destination, event.Payload, n.maxAttempts); err != nil {
+		n.log.Error("enqueue http delivery failed", slog.Int64("event_id", event.ID), slog.String("error", err.Error()))
+		n.store.RecordDeliveryAttempt(context.Background(), event.ID, "http", "enqueue_failed", stringPtr(err.Error()))
+		return
+	}
+	n.store.RecordDeliveryAttempt(context.Background(), event.ID, "http", "queued", nil)
 }
 
 func (n *TelegramNotifier) chatIDFor(source domain.Source) string {
@@ -104,10 +137,10 @@ func (n *TelegramNotifier) Start(ctx context.Context, interval time.Duration, ba
 	if lockFor <= 0 {
 		lockFor = time.Minute
 	}
-	workerID := fmt.Sprintf("telegram-%d", time.Now().UnixNano())
+	workerID := fmt.Sprintf("delivery-%d", time.Now().UnixNano())
 
 	go func() {
-		n.log.Info("telegram delivery worker started", slog.String("worker_id", workerID), slog.Duration("interval", interval), slog.Int("batch_size", batchSize))
+		n.log.Info("delivery worker started", slog.String("worker_id", workerID), slog.Duration("interval", interval), slog.Int("batch_size", batchSize))
 		n.processBatch(ctx, workerID, batchSize, lockFor)
 
 		ticker := time.NewTicker(interval)
@@ -115,7 +148,7 @@ func (n *TelegramNotifier) Start(ctx context.Context, interval time.Duration, ba
 		for {
 			select {
 			case <-ctx.Done():
-				n.log.Info("telegram delivery worker stopped", slog.String("worker_id", workerID))
+				n.log.Info("delivery worker stopped", slog.String("worker_id", workerID))
 				return
 			case <-ticker.C:
 				n.processBatch(ctx, workerID, batchSize, lockFor)
@@ -138,7 +171,19 @@ func (n *TelegramNotifier) processBatch(ctx context.Context, workerID string, ba
 }
 
 func (n *TelegramNotifier) deliver(ctx context.Context, job domain.DeliveryJob) {
-	if job.Channel != "telegram" {
+	switch job.Channel {
+	case "telegram":
+		n.deliverTelegram(ctx, job)
+	case "http":
+		n.deliverHTTP(ctx, job)
+	default:
+		n.failJob(job, "unsupported delivery channel: "+job.Channel, 0)
+	}
+}
+
+func (n *TelegramNotifier) deliverTelegram(ctx context.Context, job domain.DeliveryJob) {
+	if n.botToken == "" {
+		n.failJob(job, "telegram bot token is not configured", backoff(job.Attempts))
 		return
 	}
 	deliveryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -165,13 +210,79 @@ func (n *TelegramNotifier) deliver(ctx context.Context, job domain.DeliveryJob) 
 		return
 	}
 
-	markCtx, markCancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer markCancel()
-	if err := n.store.MarkDeliveryJobSent(markCtx, job.ID); err != nil {
-		n.log.Error("mark delivery job sent failed", slog.Int64("job_id", job.ID), slog.String("error", err.Error()))
+	if n.markSent(job) {
+		n.store.RecordDeliveryAttempt(context.Background(), job.EventID, "telegram", "sent", nil)
+	}
+}
+
+func (n *TelegramNotifier) deliverHTTP(ctx context.Context, job domain.DeliveryJob) {
+	destination := strings.TrimSpace(job.Destination)
+	parsed, err := url.Parse(destination)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		n.failJob(job, "invalid http forward destination", 0)
 		return
 	}
-	n.store.RecordDeliveryAttempt(context.Background(), job.EventID, "telegram", "sent", nil)
+
+	eventCtx, eventCancel := context.WithTimeout(ctx, 3*time.Second)
+	event, err := n.store.GetEventByInternalID(eventCtx, job.EventID)
+	eventCancel()
+	if err != nil {
+		n.failJob(job, "load event for forwarding failed: "+err.Error(), backoff(job.Attempts))
+		return
+	}
+
+	timestamp := strconv.FormatInt(time.Now().UTC().Unix(), 10)
+	deliveryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(deliveryCtx, http.MethodPost, destination, bytes.NewReader(job.Payload))
+	if err != nil {
+		n.failJob(job, err.Error(), backoff(job.Attempts))
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "SignalBox/1.0")
+	req.Header.Set("X-SignalBox-Event-ID", event.PublicID)
+	req.Header.Set("X-SignalBox-Delivery-ID", job.PublicID)
+	req.Header.Set("X-SignalBox-Timestamp", timestamp)
+	if event.Source != nil {
+		req.Header.Set("X-SignalBox-Source-ID", event.Source.PublicID)
+	}
+	if event.EventType != nil {
+		req.Header.Set("X-SignalBox-Event-Type", *event.EventType)
+	}
+	if event.Source != nil && event.Source.ForwardHMACKey != nil && strings.TrimSpace(*event.Source.ForwardHMACKey) != "" {
+		signature := signPayload(*event.Source.ForwardHMACKey, timestamp, job.Payload)
+		req.Header.Set("X-SignalBox-Signature", "sha256="+signature)
+	}
+
+	resp, err := n.client.Do(req)
+	if err != nil {
+		n.failJob(job, err.Error(), backoff(job.Attempts))
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		errText := strings.TrimSpace(fmt.Sprintf("http forward status %d %s", resp.StatusCode, string(body)))
+		n.failJob(job, errText, retryAfter(resp, backoff(job.Attempts)))
+		return
+	}
+
+	if n.markSent(job) {
+		n.store.RecordDeliveryAttempt(context.Background(), job.EventID, "http", "sent", nil)
+	}
+}
+
+func (n *TelegramNotifier) markSent(job domain.DeliveryJob) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := n.store.MarkDeliveryJobSent(ctx, job.ID); err != nil {
+		n.log.Error("mark delivery job sent failed", slog.Int64("job_id", job.ID), slog.String("error", err.Error()))
+		return false
+	}
+	return true
 }
 
 func (n *TelegramNotifier) failJob(job domain.DeliveryJob, errText string, retryDelay time.Duration) {
@@ -181,7 +292,7 @@ func (n *TelegramNotifier) failJob(job domain.DeliveryJob, errText string, retry
 		n.log.Error("mark delivery job failed", slog.Int64("job_id", job.ID), slog.String("error", err.Error()))
 		return
 	}
-	n.store.RecordDeliveryAttempt(context.Background(), job.EventID, "telegram", "failed", stringPtr(errText))
+	n.store.RecordDeliveryAttempt(context.Background(), job.EventID, job.Channel, "failed", stringPtr(errText))
 }
 
 func formatTelegramMessage(event domain.Event, source domain.Source) string {
@@ -192,6 +303,14 @@ func formatTelegramMessage(event domain.Event, source domain.Source) string {
 		html.EscapeString(event.PublicID),
 		event.CreatedAt.UTC().Format(time.RFC3339),
 	)
+}
+
+func signPayload(key, timestamp string, body []byte) string {
+	mac := hmac.New(sha256.New, []byte(strings.TrimSpace(key)))
+	_, _ = mac.Write([]byte(timestamp))
+	_, _ = mac.Write([]byte("."))
+	_, _ = mac.Write(body)
+	return hex.EncodeToString(mac.Sum(nil))
 }
 
 func retryAfter(resp *http.Response, fallback time.Duration) time.Duration {
