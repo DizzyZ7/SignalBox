@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
   title: SignalBox API
-  version: 0.8.0
-  description: Production-oriented webhook ingestion API with PostgreSQL storage, deduplication, rate limiting, cursor pagination, durable Telegram delivery queue and admin operations.
+  version: 1.0.0
+  description: Production-oriented webhook ingestion API with PostgreSQL storage, deduplication, rate limiting, cursor pagination, event replay, durable Telegram delivery queue and admin operations.
 servers:
   - url: http://localhost:8080
 security:
@@ -284,6 +284,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /v1/events/{id}/replay:
+    post:
+      summary: Replay event into the delivery queue
+      description: Puts an existing event back into the delivery queue without creating a new event record or changing deduplication state.
+      parameters:
+        - $ref: '#/components/parameters/PublicID'
+      responses:
+        '202':
+          description: Event replay queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventReplayResponse'
+        '404':
+          description: Event not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Event source is inactive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Notifier is not configured or not ready for this source
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /v1/deliveries:
     get:
       summary: List delivery jobs
@@ -489,6 +520,14 @@ components:
         created_at:
           type: string
           format: date-time
+    EventReplayResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: queued
+        event:
+          $ref: '#/components/schemas/Event'
     DeliveryJob:
       type: object
       properties:
