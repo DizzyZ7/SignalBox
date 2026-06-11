@@ -48,6 +48,7 @@ Body:
 {
   "name": "Main landing",
   "telegram_chat_id": "123456789",
+  "telegram_template": "custom Telegram text template",
   "forward_url": "https://example.com/webhooks/signalbox",
   "forward_hmac_key": "your-shared-key"
 }
@@ -56,6 +57,7 @@ Body:
 Optional fields:
 
 - `telegram_chat_id`: overrides `TELEGRAM_DEFAULT_CHAT_ID` for this source;
+- `telegram_template`: custom Go text/template message for Telegram;
 - `forward_url`: external HTTP endpoint for queued forwarding;
 - `forward_hmac_key`: enables HMAC-SHA256 signatures for HTTP forwarding.
 
@@ -67,12 +69,13 @@ Response contains `token` only once. Store it immediately. `forward_hmac_key` is
   "name": "Main landing",
   "token_hint": "abcd...wxyz",
   "telegram_chat_id": "123456789",
+  "telegram_template": "custom Telegram text template",
   "forward_url": "https://example.com/webhooks/signalbox",
   "forward_hmac_key_set": true,
   "is_active": true,
   "created_at": "2026-06-09T00:00:00Z",
   "updated_at": "2026-06-09T00:00:00Z",
-  "token": "source-secret-token"
+  "token": "source-token"
 }
 ```
 
@@ -103,13 +106,14 @@ Body supports partial update:
 {
   "name": "Main landing v2",
   "telegram_chat_id": "987654321",
+  "telegram_template": "updated Telegram text template",
   "forward_url": "https://example.com/new-webhook",
   "forward_hmac_key": "new-shared-key",
   "is_active": true
 }
 ```
 
-Set `telegram_chat_id`, `forward_url` or `forward_hmac_key` to an empty string to clear that field.
+Set `telegram_chat_id`, `telegram_template`, `forward_url` or `forward_hmac_key` to an empty string to clear that field.
 
 ## Disable source
 
@@ -182,6 +186,26 @@ Response:
 ```
 
 For unique events, SignalBox enqueues delivery jobs for every configured destination: Telegram and/or HTTP forwarding.
+
+## Telegram templates
+
+If `telegram_template` is configured on the source, SignalBox renders it with Go `text/template` before queueing the Telegram delivery job.
+
+Available variables:
+
+```text
+.Source.ID
+.Source.Name
+.Event.ID
+.Event.Type
+.Event.Origin
+.Event.ExternalID
+.Event.CreatedAt
+.Event.IsDuplicate
+.Payload
+```
+
+See [`TELEGRAM_TEMPLATES.md`](TELEGRAM_TEMPLATES.md) for examples.
 
 ## HTTP forwarding
 
