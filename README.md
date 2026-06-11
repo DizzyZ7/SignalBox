@@ -19,7 +19,10 @@ SignalBox is a production-oriented Go service for receiving webhooks, storing ev
 - Manual retry endpoint for failed delivery jobs
 - OpenAPI 3.0 specification
 - Public webhook rate limiting
+- Admin API rate limiting
+- Webhook token redaction in access logs
 - Security headers middleware
+- Backup and restore helper scripts
 - Health and readiness probes
 - Docker and Docker Compose setup
 - Production compose file for GHCR deployments
@@ -144,12 +147,28 @@ mkdir -p /opt/signalbox
 cd /opt/signalbox
 curl -fsSLO https://raw.githubusercontent.com/DizzyZ7/SignalBox/main/docker-compose.prod.yml
 curl -fsSLO https://raw.githubusercontent.com/DizzyZ7/SignalBox/main/.env.production.example
+mkdir -p scripts
+curl -fsSLo scripts/backup-postgres.sh https://raw.githubusercontent.com/DizzyZ7/SignalBox/main/scripts/backup-postgres.sh
+curl -fsSLo scripts/restore-postgres.sh https://raw.githubusercontent.com/DizzyZ7/SignalBox/main/scripts/restore-postgres.sh
+chmod +x scripts/*.sh
 cp .env.production.example .env.production
 nano .env.production
 docker compose --env-file .env.production -f docker-compose.prod.yml up -d
 ```
 
 Run SignalBox behind HTTPS through Nginx, Caddy or another reverse proxy. The production compose file binds the API to `127.0.0.1` by default.
+
+Create a compressed PostgreSQL backup with checksum:
+
+```bash
+./scripts/backup-postgres.sh
+```
+
+Restore from backup requires explicit confirmation:
+
+```bash
+CONFIRM_RESTORE=YES ./scripts/restore-postgres.sh backups/signalbox-YYYYMMDDTHHMMSSZ.sql.gz
+```
 
 See [`docs/RUNBOOK.md`](docs/RUNBOOK.md) for operations, backups, restore, rollback and incident handling.
 
