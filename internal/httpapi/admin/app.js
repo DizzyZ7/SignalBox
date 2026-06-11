@@ -128,11 +128,44 @@ async function createSource(event) {
   $("sourceTemplate").value = "";
   $("sourceForwardUrl").value = "";
   $("sourceForwardKey").value = "";
+  $("templatePreviewCard").hidden = true;
+  $("templatePreview").textContent = "";
   await loadSources();
   await loadStats();
 
   const token = source.token ? ` Token: ${source.token}` : "";
   log(`source created: ${source.name} (${source.id}).${token}`);
+}
+
+async function previewTemplate() {
+  const telegramTemplate = $("sourceTemplate").value.trim();
+  if (!telegramTemplate) {
+    log("telegram template is empty", "error");
+    return;
+  }
+
+  const sourceName = $("sourceName").value.trim() || "Preview source";
+  const payload = {
+    type: "preview.event",
+    repository: { full_name: "DizzyZ7/SignalBox" },
+    sender: { login: "DizzyZ7" },
+  };
+
+  const result = await api("/v1/templates/telegram/preview", {
+    method: "POST",
+    body: JSON.stringify({
+      source_name: sourceName,
+      telegram_template: telegramTemplate,
+      event_type: "preview.event",
+      origin: "admin-ui",
+      external_id: "preview-1",
+      payload,
+    }),
+  });
+
+  $("templatePreview").textContent = result.text || "";
+  $("templatePreviewCard").hidden = false;
+  log("template preview rendered");
 }
 
 async function loadEvents() {
@@ -275,6 +308,7 @@ function init() {
   $("refreshEvents").addEventListener("click", () => loadEvents().catch((e) => log(e.message, "error")));
   $("refreshDeliveries").addEventListener("click", () => loadDeliveries().catch((e) => log(e.message, "error")));
   $("createSourceForm").addEventListener("submit", (e) => createSource(e).catch((err) => log(err.message, "error")));
+  $("previewTemplate").addEventListener("click", () => previewTemplate().catch((err) => log(err.message, "error")));
   $("eventTypeFilter").addEventListener("keydown", (e) => { if (e.key === "Enter") loadEvents().catch((err) => log(err.message, "error")); });
   $("sourceFilter").addEventListener("keydown", (e) => { if (e.key === "Enter") loadEvents().catch((err) => log(err.message, "error")); });
   $("deliveryStatusFilter").addEventListener("change", () => loadDeliveries().catch((e) => log(e.message, "error")));
