@@ -23,6 +23,8 @@ SignalBox is a production-oriented Go service for receiving webhooks, storing ev
 - Webhook token redaction in access logs
 - Security headers middleware
 - Backup and restore helper scripts
+- Dependabot dependency updates
+- CodeQL security scanning
 - Health and readiness probes
 - Docker and Docker Compose setup
 - Production compose file for GHCR deployments
@@ -183,6 +185,8 @@ internal/ratelimit  in-memory webhook rate limiter
 internal/storage    PostgreSQL queries, migrations and delivery queue
 internal/delivery   Telegram delivery queue producer and worker
 internal/httpapi    HTTP routing and handlers
+scripts             backup and restore helpers
+.github             CI, Dependabot and CodeQL workflows
 ```
 
 ## Development
@@ -193,6 +197,10 @@ make test
 make vet
 make build
 ```
+
+## Security automation
+
+SignalBox uses Dependabot for Go modules and GitHub Actions updates, CodeQL for Go security analysis, ShellCheck for recovery scripts and a security policy for vulnerability reporting.
 
 ## Releases
 
@@ -217,6 +225,7 @@ ghcr.io/dizzyz7/signalbox:latest
 - [Architecture](docs/ARCHITECTURE.md)
 - [Deployment](docs/DEPLOY.md)
 - [Runbook](docs/RUNBOOK.md)
+- [Security policy](SECURITY.md)
 
 ## Production notes
 
