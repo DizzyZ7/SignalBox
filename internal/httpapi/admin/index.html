@@ -60,8 +60,16 @@
           <input id="sourceForwardUrl" placeholder="Forward URL, e.g. https://api.example.com/webhook">
           <input id="sourceForwardKey" type="password" placeholder="Forward HMAC key (optional)">
           <textarea id="sourceTemplate" placeholder="Telegram template (optional)"></textarea>
-          <button type="submit">Create</button>
+          <div class="template-actions">
+            <button type="button" id="previewTemplate" class="secondary">Preview template</button>
+            <button type="submit">Create</button>
+          </div>
         </form>
+
+        <div class="preview-card" id="templatePreviewCard" hidden>
+          <div class="preview-title">Telegram preview</div>
+          <pre id="templatePreview"></pre>
+        </div>
 
         <div class="table-wrap">
           <table>
