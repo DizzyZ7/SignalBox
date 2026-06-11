@@ -34,6 +34,10 @@ internal/httpapi
   events_cursor.go     cursor pagination handler
   events_replay.go     event replay handler
   deliveries.go        delivery job admin handlers
+
+scripts
+  backup-postgres.sh   compressed PostgreSQL backup with checksum
+  restore-postgres.sh  guarded PostgreSQL restore from backup
 ```
 
 ## Request flow
@@ -71,8 +75,10 @@ Replay does not create a new event row and does not change deduplication state. 
 - Telegram delivery is isolated behind a notifier interface and backed by a durable queue.
 - HTTP handlers do validation and translate storage errors into API responses.
 - Public webhook requests are rate-limited by client IP and source token.
+- Admin API requests are separately rate-limited before API key validation.
 - Source tokens are never stored in plain text, only SHA-256 hashes.
 - Source token is returned only on source creation and token rotation.
+- Webhook source tokens are redacted from access logs.
 - Event replay is admin-only and validates notifier readiness before queueing.
 
 ## Delivery reliability
@@ -86,6 +92,13 @@ Telegram delivery uses the `delivery_jobs` table:
 - failed jobs return to `pending` with exponential backoff;
 - jobs become terminal `failed` after `DELIVERY_MAX_ATTEMPTS`;
 - sent jobs are marked as `sent` with `sent_at`.
+
+## Data-loss prevention
+
+- PostgreSQL stores sources, events, deduplication keys, delivery jobs and delivery attempts.
+- `scripts/backup-postgres.sh` creates compressed backups and SHA-256 checksums.
+- `scripts/restore-postgres.sh` requires `CONFIRM_RESTORE=YES`, verifies backup integrity and stops API writes before restore.
+- CI checks shell scripts with `bash -n` and ShellCheck so backup tooling cannot break silently.
 
 ## Current limitations
 
