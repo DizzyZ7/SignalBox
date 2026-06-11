@@ -216,6 +216,33 @@ GET /v1/events/<EVENT_ID>
 X-API-Key: <ADMIN_API_KEY>
 ```
 
+## Replay event
+
+```http
+POST /v1/events/<EVENT_ID>/replay
+X-API-Key: <ADMIN_API_KEY>
+```
+
+Replays an existing event by putting it back into the delivery queue. This does not create a new event record and does not change deduplication state.
+
+Replay checks that:
+
+- the event exists;
+- the source is still active;
+- the notifier is configured;
+- the notifier has a destination for the source.
+
+Response:
+
+```json
+{
+  "status": "queued",
+  "event": {
+    "id": "event-public-id"
+  }
+}
+```
+
 ## List delivery jobs
 
 ```http
