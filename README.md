@@ -17,6 +17,7 @@ SignalBox is a production-oriented Go service for receiving webhooks, storing ev
 - Prometheus-compatible `/metrics` endpoint
 - Embedded `/admin` UI
 - Optional Telegram notifications
+- Per-source Telegram message templates
 - Queued HTTP forwarding to external webhook URLs
 - HMAC-SHA256 signatures for HTTP forwarding
 - Postgres-backed delivery queue with retry/backoff
@@ -224,6 +225,10 @@ SignalBox uses Dependabot for Go modules and GitHub Actions updates, CodeQL for 
 
 SignalBox exposes Prometheus-compatible metrics at `/metrics`. See [`docs/METRICS.md`](docs/METRICS.md) for metric names, scrape examples and alert ideas.
 
+## Telegram templates
+
+SignalBox supports per-source Telegram message templates using Go `text/template`. See [`docs/TELEGRAM_TEMPLATES.md`](docs/TELEGRAM_TEMPLATES.md) for available variables and examples.
+
 ## HTTP forwarding
 
 SignalBox can forward unique accepted events to external HTTP endpoints through the same durable delivery queue as Telegram notifications. See [`docs/HTTP_FORWARDING.md`](docs/HTTP_FORWARDING.md) for headers, retry behavior and HMAC signature format.
@@ -252,6 +257,7 @@ ghcr.io/dizzyz7/signalbox:latest
 - [Deployment](docs/DEPLOY.md)
 - [Runbook](docs/RUNBOOK.md)
 - [Metrics](docs/METRICS.md)
+- [Telegram templates](docs/TELEGRAM_TEMPLATES.md)
 - [HTTP forwarding](docs/HTTP_FORWARDING.md)
 - [Security policy](SECURITY.md)
 
