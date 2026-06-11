@@ -12,7 +12,7 @@ import (
 func (r *Repository) ListEventsCursor(ctx context.Context, filter domain.EventFilter) ([]domain.Event, error) {
 	query := `
 		SELECT e.id, e.public_id, e.source_id, e.event_type, e.origin, e.external_id, e.payload, e.payload_hash, e.ip, e.user_agent, e.is_duplicate, e.created_at,
-		       s.id, s.public_id, s.name, s.token_hash, s.token_hint, s.telegram_chat_id, s.forward_url, s.forward_hmac_key, s.is_active, s.created_at, s.updated_at
+		       s.id, s.public_id, s.name, s.token_hash, s.token_hint, s.telegram_chat_id, s.telegram_template, s.forward_url, s.forward_hmac_key, s.is_active, s.created_at, s.updated_at
 		FROM events e JOIN webhook_sources s ON s.id = e.source_id
 		WHERE 1 = 1
 	`
