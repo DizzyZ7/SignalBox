@@ -31,9 +31,14 @@ internal/delivery
 
 internal/httpapi
   server.go            HTTP routing, handlers, middleware
+  admin_ui.go          embedded Admin UI handler
+  metrics.go           Prometheus-compatible metrics wrapper
   events_cursor.go     cursor pagination handler
   events_replay.go     event replay handler
   deliveries.go        delivery job admin handlers
+
+internal/metrics
+  metrics.go           lightweight Prometheus text exposition registry
 
 scripts
   backup-postgres.sh   compressed PostgreSQL backup with checksum
@@ -67,6 +72,18 @@ admin
 
 Replay does not create a new event row and does not change deduplication state. It only reuses the stored event and puts it back into the delivery pipeline.
 
+## Observability flow
+
+```text
+Prometheus
+  -> GET /metrics
+  -> HTTP in-memory counters
+  -> PostgreSQL stats snapshot
+  -> delivery queue status gauges
+```
+
+The metrics layer wraps the HTTP handler without changing business handlers. Queue and event gauges are read from PostgreSQL so process restarts do not erase core operational state.
+
 ## Design decisions
 
 - `cmd/api/main.go` only wires dependencies, starts the HTTP server and starts the delivery worker.
@@ -80,6 +97,8 @@ Replay does not create a new event row and does not change deduplication state. 
 - Source token is returned only on source creation and token rotation.
 - Webhook source tokens are redacted from access logs.
 - Event replay is admin-only and validates notifier readiness before queueing.
+- Admin UI is embedded into the Go binary and does not require a separate frontend service.
+- Prometheus metrics are exposed in text format without adding a heavy metrics SDK.
 
 ## Delivery reliability
 
@@ -100,16 +119,24 @@ Telegram delivery uses the `delivery_jobs` table:
 - `scripts/restore-postgres.sh` requires `CONFIRM_RESTORE=YES`, verifies backup integrity and stops API writes before restore.
 - CI checks shell scripts with `bash -n` and ShellCheck so backup tooling cannot break silently.
 
+## Horizontal scaling readiness
+
+- Delivery workers use `FOR UPDATE SKIP LOCKED`, so multiple instances can claim jobs safely.
+- Event deduplication uses the `(source_id, payload_hash)` primary key in PostgreSQL.
+- HTTP metrics are per-process, while stored event and delivery gauges are read from PostgreSQL.
+- For strict global rate limits in multi-replica deployments, replace the in-memory limiter with Redis-backed limits.
+
 ## Current limitations
 
 - Rate limiting is in-memory, so limits are per application replica.
 - Delivery queue is Postgres-backed; for very high throughput it can later move to Redis, NATS or RabbitMQ.
 - Migrations are embedded in Go code.
-- There is no web admin UI yet.
+- SQLite/WAL storage backend is not implemented yet.
 
 ## Next production upgrades
 
 - Redis-backed distributed rate limit for multi-replica deployments.
 - Separate migration files or migration CLI.
-- Web admin UI for sources, events and deliveries.
+- Telegram message templates per source.
 - Delivery provider abstraction for email, Slack, Discord or webhooks.
+- Optional SQLite/WAL storage backend for single-binary deployments.
