@@ -88,7 +88,7 @@ func (n *TelegramNotifier) enqueueTelegram(event domain.Event, source domain.Sou
 	chatID := n.chatIDFor(source)
 	text := formatTelegramMessage(event, source)
 	if source.TelegramTemplate != nil && strings.TrimSpace(*source.TelegramTemplate) != "" {
-		customText, err := renderTelegramTemplate(*source.TelegramTemplate, event, source)
+		customText, err := RenderTelegramTemplate(*source.TelegramTemplate, event, source)
 		if err != nil {
 			n.log.Error("telegram template render failed", slog.Int64("event_id", event.ID), slog.String("source_id", source.PublicID), slog.String("error", err.Error()))
 			n.store.RecordDeliveryAttempt(context.Background(), event.ID, "telegram", "template_failed", stringPtr(err.Error()))
@@ -315,7 +315,7 @@ func formatTelegramMessage(event domain.Event, source domain.Source) string {
 	)
 }
 
-func renderTelegramTemplate(raw string, event domain.Event, source domain.Source) (string, error) {
+func RenderTelegramTemplate(raw string, event domain.Event, source domain.Source) (string, error) {
 	payload := make(map[string]any)
 	if len(event.Payload) > 0 {
 		_ = json.Unmarshal(event.Payload, &payload)
