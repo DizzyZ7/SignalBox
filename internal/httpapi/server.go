@@ -59,7 +59,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /v1/deliveries/{id}", s.admin(http.HandlerFunc(s.getDelivery)))
 	mux.Handle("POST /v1/deliveries/{id}/retry", s.admin(http.HandlerFunc(s.retryDelivery)))
 	mux.Handle("GET /v1/stats", s.admin(http.HandlerFunc(s.stats)))
-	return s.accessLog(s.recover(s.requestID(mux)))
+	return s.accessLog(s.recover(s.securityHeaders(s.requestID(mux))))
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
@@ -371,6 +371,21 @@ func (s *Server) admin(next http.Handler) http.Handler {
 		if subtle.ConstantTimeCompare([]byte(r.Header.Get("X-API-Key")), []byte(s.cfg.AdminAPIKey)) != 1 {
 			writeError(w, http.StatusUnauthorized, "unauthorized", requestID(r))
 			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Referrer-Policy", "no-referrer")
+		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
+		h.Set("Cache-Control", "no-store")
+		if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+			h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		}
 		next.ServeHTTP(w, r)
 	})
