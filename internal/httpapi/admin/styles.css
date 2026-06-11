@@ -27,7 +27,7 @@ body {
   color: var(--text);
 }
 
-button, input, select {
+button, input, select, textarea {
   font: inherit;
 }
 
@@ -52,7 +52,7 @@ button.secondary {
   color: var(--text);
 }
 
-input, select {
+input, select, textarea {
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -62,7 +62,14 @@ input, select {
   outline: none;
 }
 
-input:focus, select:focus {
+textarea {
+  min-height: 86px;
+  resize: vertical;
+  grid-column: 1 / -2;
+  line-height: 1.45;
+}
+
+input:focus, select:focus, textarea:focus {
   border-color: rgba(94, 234, 212, 0.7);
   box-shadow: 0 0 0 4px rgba(94, 234, 212, 0.09);
 }
@@ -219,7 +226,7 @@ label {
 table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 680px;
+  min-width: 760px;
 }
 
 th, td {
@@ -288,6 +295,7 @@ pre {
   .topbar, .auth-panel, .panel-head { grid-template-columns: 1fr; flex-direction: column; align-items: stretch; }
   .auth-panel { display: grid; }
   .form-grid, .inline-form, .source-form, .filters { grid-template-columns: 1fr; }
+  textarea { grid-column: auto; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
   .grid { grid-template-columns: 1fr; }
 }
