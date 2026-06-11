@@ -47,17 +47,22 @@ func NewTelegramNotifier(botToken, defaultChatID string, store DeliveryStore, lo
 	}
 }
 
+func (n *TelegramNotifier) Enabled() bool {
+	return n != nil && n.botToken != "" && n.store != nil
+}
+
+func (n *TelegramNotifier) CanNotify(source domain.Source) bool {
+	if !n.Enabled() {
+		return false
+	}
+	return n.chatIDFor(source) != ""
+}
+
 func (n *TelegramNotifier) Notify(event domain.Event, source domain.Source) {
-	if n == nil || n.botToken == "" || n.store == nil {
+	if !n.CanNotify(source) {
 		return
 	}
-	chatID := n.defaultChatID
-	if source.TelegramChatID != nil && strings.TrimSpace(*source.TelegramChatID) != "" {
-		chatID = strings.TrimSpace(*source.TelegramChatID)
-	}
-	if chatID == "" {
-		return
-	}
+	chatID := n.chatIDFor(source)
 
 	text := formatTelegramMessage(event, source)
 	body, err := json.Marshal(map[string]any{"chat_id": chatID, "text": text, "parse_mode": "HTML", "disable_web_page_preview": true})
@@ -75,8 +80,19 @@ func (n *TelegramNotifier) Notify(event domain.Event, source domain.Source) {
 	n.store.RecordDeliveryAttempt(context.Background(), event.ID, "telegram", "queued", nil)
 }
 
+func (n *TelegramNotifier) chatIDFor(source domain.Source) string {
+	if n == nil {
+		return ""
+	}
+	chatID := n.defaultChatID
+	if source.TelegramChatID != nil && strings.TrimSpace(*source.TelegramChatID) != "" {
+		chatID = strings.TrimSpace(*source.TelegramChatID)
+	}
+	return chatID
+}
+
 func (n *TelegramNotifier) Start(ctx context.Context, interval time.Duration, batchSize int, lockFor time.Duration) {
-	if n == nil || n.botToken == "" || n.store == nil {
+	if !n.Enabled() {
 		return
 	}
 	if interval <= 0 {
