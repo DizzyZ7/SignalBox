@@ -192,11 +192,18 @@ label {
   margin-bottom: 16px;
 }
 
-.inline-form, .filters {
+.inline-form, .source-form, .filters {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
   gap: 10px;
   margin-bottom: 14px;
+}
+
+.inline-form {
+  grid-template-columns: 1fr 1fr auto;
+}
+
+.source-form {
+  grid-template-columns: 1fr 1fr 1.4fr 1fr auto;
 }
 
 .filters {
@@ -280,7 +287,7 @@ pre {
   .shell { padding: 18px; }
   .topbar, .auth-panel, .panel-head { grid-template-columns: 1fr; flex-direction: column; align-items: stretch; }
   .auth-panel { display: grid; }
-  .form-grid, .inline-form, .filters { grid-template-columns: 1fr; }
+  .form-grid, .inline-form, .source-form, .filters { grid-template-columns: 1fr; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
   .grid { grid-template-columns: 1fr; }
 }
