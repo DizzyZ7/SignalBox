@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/DizzyZ7/SignalBox/internal/domain"
@@ -86,6 +87,15 @@ func (n *TelegramNotifier) Notify(event domain.Event, source domain.Source) {
 func (n *TelegramNotifier) enqueueTelegram(event domain.Event, source domain.Source) {
 	chatID := n.chatIDFor(source)
 	text := formatTelegramMessage(event, source)
+	if source.TelegramTemplate != nil && strings.TrimSpace(*source.TelegramTemplate) != "" {
+		customText, err := renderTelegramTemplate(*source.TelegramTemplate, event, source)
+		if err != nil {
+			n.log.Error("telegram template render failed", slog.Int64("event_id", event.ID), slog.String("source_id", source.PublicID), slog.String("error", err.Error()))
+			n.store.RecordDeliveryAttempt(context.Background(), event.ID, "telegram", "template_failed", stringPtr(err.Error()))
+		} else if strings.TrimSpace(customText) != "" {
+			text = customText
+		}
+	}
 	body, err := json.Marshal(map[string]any{"chat_id": chatID, "text": text, "parse_mode": "HTML", "disable_web_page_preview": true})
 	if err != nil {
 		return
@@ -303,6 +313,51 @@ func formatTelegramMessage(event domain.Event, source domain.Source) string {
 		html.EscapeString(event.PublicID),
 		event.CreatedAt.UTC().Format(time.RFC3339),
 	)
+}
+
+func renderTelegramTemplate(raw string, event domain.Event, source domain.Source) (string, error) {
+	payload := make(map[string]any)
+	if len(event.Payload) > 0 {
+		_ = json.Unmarshal(event.Payload, &payload)
+	}
+	data := map[string]any{
+		"Source": map[string]any{
+			"ID":   source.PublicID,
+			"Name": source.Name,
+		},
+		"Event": map[string]any{
+			"ID":          event.PublicID,
+			"Type":        ptrValue(event.EventType, "unknown"),
+			"Origin":      ptrValue(event.Origin, ""),
+			"ExternalID":  ptrValue(event.ExternalID, ""),
+			"CreatedAt":   event.CreatedAt.UTC().Format(time.RFC3339),
+			"IsDuplicate": event.IsDuplicate,
+		},
+		"Payload": payload,
+	}
+	funcs := template.FuncMap{
+		"json": func(value any) string {
+			encoded, err := json.Marshal(value)
+			if err != nil {
+				return ""
+			}
+			return string(encoded)
+		},
+		"html": html.EscapeString,
+	}
+	tmpl, err := template.New("telegram_message").Funcs(funcs).Option("missingkey=zero").Parse(raw)
+	if err != nil {
+		return "", err
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", err
+	}
+	text := strings.TrimSpace(buf.String())
+	if len(text) > 4096 {
+		text = text[:4096]
+	}
+	return text, nil
 }
 
 func signPayload(key, timestamp string, body []byte) string {
