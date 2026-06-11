@@ -11,10 +11,10 @@ import (
 )
 
 type Metrics struct {
-	mu             sync.RWMutex
-	httpRequests   map[labelKey]counter
-	webhookEvents  map[labelKey]uint64
-	startedAt      time.Time
+	mu            sync.RWMutex
+	httpRequests  map[labelKey]counter
+	webhookEvents map[labelKey]uint64
+	startedAt     time.Time
 }
 
 type labelKey string
@@ -80,28 +80,28 @@ func (m *Metrics) WritePrometheus(w io.Writer, db DatabaseSnapshot) {
 	writeHelp(w, "signalbox_http_requests_total", "Total HTTP requests by method, path and status.")
 	writeType(w, "signalbox_http_requests_total", "counter")
 	for _, key := range sortedHTTPKeys(httpRequests) {
-		method, path, status := splitKey(key)
+		method, path, status := split3(key)
 		_, _ = fmt.Fprintf(w, "signalbox_http_requests_total{method=\"%s\",path=\"%s\",status=\"%s\"} %d\n", escape(method), escape(path), escape(status), httpRequests[key].Count)
 	}
 
 	writeHelp(w, "signalbox_http_request_duration_seconds_sum", "Total HTTP request duration in seconds.")
 	writeType(w, "signalbox_http_request_duration_seconds_sum", "counter")
 	for _, key := range sortedHTTPKeys(httpRequests) {
-		method, path, status := splitKey(key)
+		method, path, status := split3(key)
 		_, _ = fmt.Fprintf(w, "signalbox_http_request_duration_seconds_sum{method=\"%s\",path=\"%s\",status=\"%s\"} %.6f\n", escape(method), escape(path), escape(status), httpRequests[key].DurationSum)
 	}
 
 	writeHelp(w, "signalbox_http_request_duration_seconds_count", "Total observed HTTP request durations.")
 	writeType(w, "signalbox_http_request_duration_seconds_count", "counter")
 	for _, key := range sortedHTTPKeys(httpRequests) {
-		method, path, status := splitKey(key)
+		method, path, status := split3(key)
 		_, _ = fmt.Fprintf(w, "signalbox_http_request_duration_seconds_count{method=\"%s\",path=\"%s\",status=\"%s\"} %d\n", escape(method), escape(path), escape(status), httpRequests[key].Count)
 	}
 
 	writeHelp(w, "signalbox_webhook_events_total", "Total accepted webhook events by source, type and duplicate flag.")
 	writeType(w, "signalbox_webhook_events_total", "counter")
 	for _, key := range sortedWebhookKeys(webhookEvents) {
-		sourceID, eventType, duplicate := splitKey(key)
+		sourceID, eventType, duplicate := split3(key)
 		_, _ = fmt.Fprintf(w, "signalbox_webhook_events_total{source=\"%s\",type=\"%s\",duplicate=\"%s\"} %d\n", escape(sourceID), escape(eventType), escape(duplicate), webhookEvents[key])
 	}
 
@@ -163,8 +163,12 @@ func makeKey(parts ...string) labelKey {
 	return labelKey(strings.Join(parts, "\xff"))
 }
 
-func splitKey(key labelKey) []string {
-	return strings.Split(string(key), "\xff")
+func split3(key labelKey) (string, string, string) {
+	parts := strings.Split(string(key), "\xff")
+	for len(parts) < 3 {
+		parts = append(parts, "")
+	}
+	return parts[0], parts[1], parts[2]
 }
 
 func escape(value string) string {
