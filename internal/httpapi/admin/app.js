@@ -1,6 +1,8 @@
 const state = {
   baseUrl: localStorage.getItem("signalbox.baseUrl") || window.location.origin,
   apiKey: localStorage.getItem("signalbox.apiKey") || "",
+  sources: [],
+  selectedSourceId: null,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -83,12 +85,13 @@ async function loadStats() {
 
 async function loadSources() {
   const table = $("sourcesTable");
-  table.innerHTML = `<tr><td colspan="7" class="empty">Loading…</td></tr>`;
+  table.innerHTML = `<tr><td colspan="8" class="empty">Loading…</td></tr>`;
   const data = await api("/v1/sources");
   const items = data.items || [];
+  state.sources = items;
 
   if (!items.length) {
-    renderEmpty(table, 7);
+    renderEmpty(table, 8);
     return;
   }
 
@@ -101,8 +104,99 @@ async function loadSources() {
       <td>${item.telegram_template ? '<span class="badge ok">custom</span>' : '<span class="badge warn">default</span>'}</td>
       <td>${item.forward_url ? `<code title="${escapeHTML(item.forward_url)}">${escapeHTML(shortID(item.forward_url))}</code>` : "—"}</td>
       <td>${item.forward_hmac_key_set ? '<span class="badge ok">enabled</span>' : '<span class="badge warn">off</span>'}</td>
+      <td><div class="action-row"><button class="secondary" data-edit-source="${escapeHTML(item.id)}">Edit</button></div></td>
     </tr>
   `).join("");
+
+  table.querySelectorAll("[data-edit-source]").forEach((button) => {
+    button.addEventListener("click", () => openSourceEditor(button.dataset.editSource));
+  });
+}
+
+function sourceById(id) {
+  return state.sources.find((source) => source.id === id) || null;
+}
+
+function openSourceEditor(id) {
+  const source = sourceById(id);
+  if (!source) {
+    log(`source not found in UI state: ${id}`, "error");
+    return;
+  }
+
+  state.selectedSourceId = id;
+  $("editSourceMeta").textContent = `${source.name} · ${source.id}`;
+  $("editSourceName").value = source.name || "";
+  $("editSourceChat").value = source.telegram_chat_id || "";
+  $("editSourceTemplate").value = source.telegram_template || "";
+  $("editSourceForwardUrl").value = source.forward_url || "";
+  $("editSourceForwardKey").value = "";
+  $("editSourceActive").checked = Boolean(source.is_active);
+  $("editTemplatePreviewCard").hidden = true;
+  $("editTemplatePreview").textContent = "";
+  $("sourceEditor").hidden = false;
+  $("sourceEditor").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function closeSourceEditor() {
+  state.selectedSourceId = null;
+  $("sourceEditor").hidden = true;
+  $("editTemplatePreviewCard").hidden = true;
+  $("editTemplatePreview").textContent = "";
+}
+
+async function saveSourceEdit() {
+  if (!state.selectedSourceId) {
+    log("no source selected", "error");
+    return;
+  }
+
+  const payload = {
+    name: $("editSourceName").value.trim(),
+    telegram_chat_id: $("editSourceChat").value.trim(),
+    telegram_template: $("editSourceTemplate").value.trim(),
+    forward_url: $("editSourceForwardUrl").value.trim(),
+    is_active: $("editSourceActive").checked,
+  };
+
+  const newHmacKey = $("editSourceForwardKey").value.trim();
+  if (newHmacKey) {
+    payload.forward_hmac_key = newHmacKey;
+  }
+
+  await api(`/v1/sources/${encodeURIComponent(state.selectedSourceId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+
+  $("editSourceForwardKey").value = "";
+  await loadSources();
+  await loadStats();
+  log(`source updated: ${state.selectedSourceId}`);
+}
+
+async function rotateSelectedSourceToken() {
+  if (!state.selectedSourceId) {
+    log("no source selected", "error");
+    return;
+  }
+  const result = await api(`/v1/sources/${encodeURIComponent(state.selectedSourceId)}/rotate-token`, {
+    method: "POST",
+  });
+  await loadSources();
+  log(`source token rotated: ${state.selectedSourceId}. New token: ${result.token || "not returned"}`);
+}
+
+async function previewEditTemplate() {
+  const telegramTemplate = $("editSourceTemplate").value.trim();
+  if (!telegramTemplate) {
+    log("edit telegram template is empty", "error");
+    return;
+  }
+  const result = await previewTemplateText($("editSourceName").value.trim() || "Preview source", telegramTemplate);
+  $("editTemplatePreview").textContent = result.text || "";
+  $("editTemplatePreviewCard").hidden = false;
+  log("edit template preview rendered");
 }
 
 async function createSource(event) {
@@ -137,21 +231,14 @@ async function createSource(event) {
   log(`source created: ${source.name} (${source.id}).${token}`);
 }
 
-async function previewTemplate() {
-  const telegramTemplate = $("sourceTemplate").value.trim();
-  if (!telegramTemplate) {
-    log("telegram template is empty", "error");
-    return;
-  }
-
-  const sourceName = $("sourceName").value.trim() || "Preview source";
+async function previewTemplateText(sourceName, telegramTemplate) {
   const payload = {
     type: "preview.event",
     repository: { full_name: "DizzyZ7/SignalBox" },
     sender: { login: "DizzyZ7" },
   };
 
-  const result = await api("/v1/templates/telegram/preview", {
+  return api("/v1/templates/telegram/preview", {
     method: "POST",
     body: JSON.stringify({
       source_name: sourceName,
@@ -162,7 +249,16 @@ async function previewTemplate() {
       payload,
     }),
   });
+}
 
+async function previewTemplate() {
+  const telegramTemplate = $("sourceTemplate").value.trim();
+  if (!telegramTemplate) {
+    log("telegram template is empty", "error");
+    return;
+  }
+  const sourceName = $("sourceName").value.trim() || "Preview source";
+  const result = await previewTemplateText(sourceName, telegramTemplate);
   $("templatePreview").textContent = result.text || "";
   $("templatePreviewCard").hidden = false;
   log("template preview rendered");
@@ -309,6 +405,10 @@ function init() {
   $("refreshDeliveries").addEventListener("click", () => loadDeliveries().catch((e) => log(e.message, "error")));
   $("createSourceForm").addEventListener("submit", (e) => createSource(e).catch((err) => log(err.message, "error")));
   $("previewTemplate").addEventListener("click", () => previewTemplate().catch((err) => log(err.message, "error")));
+  $("cancelEditSource").addEventListener("click", closeSourceEditor);
+  $("saveSourceEdit").addEventListener("click", () => saveSourceEdit().catch((err) => log(err.message, "error")));
+  $("rotateSourceToken").addEventListener("click", () => rotateSelectedSourceToken().catch((err) => log(err.message, "error")));
+  $("previewEditTemplate").addEventListener("click", () => previewEditTemplate().catch((err) => log(err.message, "error")));
   $("eventTypeFilter").addEventListener("keydown", (e) => { if (e.key === "Enter") loadEvents().catch((err) => log(err.message, "error")); });
   $("sourceFilter").addEventListener("keydown", (e) => { if (e.key === "Enter") loadEvents().catch((err) => log(err.message, "error")); });
   $("deliveryStatusFilter").addEventListener("change", () => loadDeliveries().catch((e) => log(e.message, "error")));
