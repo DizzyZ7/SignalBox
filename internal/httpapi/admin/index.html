@@ -49,7 +49,7 @@
         <div class="panel-head">
           <div>
             <h2>Sources</h2>
-            <p>Create Telegram, template and HTTP-forwarding sources.</p>
+            <p>Create, edit and operate webhook sources.</p>
           </div>
           <button id="refreshSources" class="secondary">Refresh</button>
         </div>
@@ -71,10 +71,43 @@
           <pre id="templatePreview"></pre>
         </div>
 
+        <section class="editor-card" id="sourceEditor" hidden>
+          <div class="panel-head">
+            <div>
+              <h2>Edit source</h2>
+              <p id="editSourceMeta">No source selected</p>
+            </div>
+            <button type="button" id="cancelEditSource" class="secondary">Cancel</button>
+          </div>
+
+          <div class="source-form">
+            <input id="editSourceName" placeholder="Source name" maxlength="120">
+            <input id="editSourceChat" placeholder="Telegram chat id">
+            <input id="editSourceForwardUrl" placeholder="Forward URL">
+            <input id="editSourceForwardKey" type="password" placeholder="New HMAC key, blank = keep current">
+            <textarea id="editSourceTemplate" placeholder="Telegram template"></textarea>
+            <label class="checkbox-label">
+              <input id="editSourceActive" type="checkbox">
+              Active source
+            </label>
+          </div>
+
+          <div class="template-actions">
+            <button type="button" id="previewEditTemplate" class="secondary">Preview template</button>
+            <button type="button" id="rotateSourceToken" class="secondary">Rotate token</button>
+            <button type="button" id="saveSourceEdit">Save changes</button>
+          </div>
+
+          <div class="preview-card" id="editTemplatePreviewCard" hidden>
+            <div class="preview-title">Edit preview</div>
+            <pre id="editTemplatePreview"></pre>
+          </div>
+        </section>
+
         <div class="table-wrap">
           <table>
             <thead>
-              <tr><th>Name</th><th>ID</th><th>Active</th><th>Telegram</th><th>Template</th><th>HTTP forward</th><th>HMAC</th></tr>
+              <tr><th>Name</th><th>ID</th><th>Active</th><th>Telegram</th><th>Template</th><th>HTTP forward</th><th>HMAC</th><th>Actions</th></tr>
             </thead>
             <tbody id="sourcesTable"></tbody>
           </table>
@@ -149,7 +182,7 @@
   </div>
 
   <template id="emptyRowTemplate">
-    <tr><td colspan="7" class="empty">No data</td></tr>
+    <tr><td colspan="8" class="empty">No data</td></tr>
   </template>
 
   <script src="/admin/app.js"></script>
