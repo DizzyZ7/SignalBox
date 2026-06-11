@@ -12,6 +12,7 @@ SignalBox is a production-oriented Go service for receiving webhooks, storing ev
 - Duplicate detection without losing audit records
 - Event filters by source, type, origin, duplicate flag and time range
 - Cursor-based event pagination with legacy offset support
+- Manual event replay back into the delivery queue
 - Aggregated stats endpoint with delivery queue counters
 - Optional Telegram notifications
 - Postgres-backed delivery queue with retry/backoff
@@ -101,6 +102,13 @@ Next page with cursor:
 
 ```bash
 curl "http://localhost:8080/v1/events?limit=50&cursor=<NEXT_CURSOR>" \
+  -H "X-API-Key: <ADMIN_API_KEY>"
+```
+
+Replay an event into the delivery queue:
+
+```bash
+curl -X POST http://localhost:8080/v1/events/<EVENT_ID>/replay \
   -H "X-API-Key: <ADMIN_API_KEY>"
 ```
 
