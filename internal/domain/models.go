@@ -12,6 +12,7 @@ type Source struct {
 	TokenHash         string    `json:"-"`
 	TokenHint         string    `json:"token_hint"`
 	TelegramChatID    *string   `json:"telegram_chat_id,omitempty"`
+	TelegramTemplate  *string   `json:"telegram_template,omitempty"`
 	ForwardURL        *string   `json:"forward_url,omitempty"`
 	ForwardHMACKey    *string   `json:"-"`
 	ForwardHMACKeySet bool      `json:"forward_hmac_key_set"`
