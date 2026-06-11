@@ -15,8 +15,12 @@ The UI is embedded into the Go binary with `embed`, so it does not require Node.
 - dashboard stats
 - source list
 - source creation
+- source editing
+- source active/inactive switching
+- source token rotation
 - Telegram chat id configuration
 - Telegram message template configuration
+- Telegram template preview
 - HTTP forward URL configuration
 - HTTP forward HMAC key configuration
 - recent event list
@@ -36,6 +40,7 @@ The Admin UI is only a browser interface over the existing Admin API.
 - API key is stored in browser local storage for convenience.
 - Use the UI only over HTTPS in production.
 - HTTP forward HMAC keys are write-only from the UI perspective: the API returns only whether the key is configured.
+- During source editing, leaving the HMAC input blank keeps the current key unchanged.
 
 For stricter environments, put `/admin` behind additional reverse-proxy authentication or VPN access.
 
@@ -77,6 +82,34 @@ When `Telegram template` is configured, every unique accepted event sent to Tele
 When `Forward URL` is configured, every unique accepted event is queued for HTTP forwarding.
 
 See [`TELEGRAM_TEMPLATES.md`](TELEGRAM_TEMPLATES.md) for template variables and examples.
+
+## Editing a source
+
+In the sources table, click `Edit`.
+
+The editor supports:
+
+```text
+- name update
+- active/inactive switch
+- Telegram chat id update or clear
+- Telegram template update or clear
+- Telegram template preview
+- HTTP forward URL update or clear
+- HMAC key rotation by entering a new value
+- source token rotation
+```
+
+Important behavior:
+
+```text
+Blank Telegram chat id clears the chat override.
+Blank Telegram template clears the custom template and returns to default Telegram text.
+Blank Forward URL disables HTTP forwarding.
+Blank HMAC key in edit mode keeps the current HMAC key unchanged.
+```
+
+Token rotation returns the new source token once in the activity log. Save it immediately.
 
 ## Recommended reverse proxy rule
 
