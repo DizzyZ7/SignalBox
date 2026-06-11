@@ -52,6 +52,12 @@ button.secondary {
   color: var(--text);
 }
 
+button.danger {
+  background: rgba(251, 113, 133, 0.13);
+  border: 1px solid rgba(251, 113, 133, 0.35);
+  color: var(--danger);
+}
+
 input, select, textarea {
   width: 100%;
   border: 1px solid var(--border);
@@ -60,6 +66,11 @@ input, select, textarea {
   background: rgba(2, 18, 16, 0.8);
   color: var(--text);
   outline: none;
+}
+
+input[type="checkbox"] {
+  width: auto;
+  accent-color: var(--accent-2);
 }
 
 textarea {
@@ -159,6 +170,17 @@ label {
   font-size: 13px;
 }
 
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(2, 18, 16, 0.65);
+  color: var(--text);
+}
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
@@ -218,14 +240,19 @@ label {
   gap: 10px;
   grid-column: 1 / -1;
   justify-content: flex-end;
+  flex-wrap: wrap;
 }
 
-.preview-card {
+.editor-card, .preview-card {
   margin-bottom: 14px;
   border: 1px solid var(--border);
   border-radius: 16px;
   background: rgba(2, 18, 16, 0.55);
   overflow: hidden;
+}
+
+.editor-card {
+  padding: 16px;
 }
 
 .preview-title {
@@ -236,6 +263,17 @@ label {
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.action-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.action-row button {
+  padding: 8px 11px;
+  font-size: 13px;
 }
 
 .filters {
@@ -251,7 +289,7 @@ label {
 table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 760px;
+  min-width: 860px;
 }
 
 th, td {
