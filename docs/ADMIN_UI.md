@@ -16,6 +16,7 @@ The UI is embedded into the Go binary with `embed`, so it does not require Node.
 - source list
 - source creation
 - Telegram chat id configuration
+- Telegram message template configuration
 - HTTP forward URL configuration
 - HTTP forward HMAC key configuration
 - recent event list
@@ -59,18 +60,23 @@ API base URL: https://signalbox.example.com
 X-API-Key: <ADMIN_API_KEY>
 ```
 
-## Creating a forwarding source
+## Creating a source
 
 In the source form, fill:
 
 ```text
 Source name: GitHub events
 Telegram chat id: optional
+Telegram template: optional Go text/template message
 Forward URL: https://example.com/webhooks/signalbox
 Forward HMAC key: optional shared key for outgoing signatures
 ```
 
+When `Telegram template` is configured, every unique accepted event sent to Telegram uses that custom text.
+
 When `Forward URL` is configured, every unique accepted event is queued for HTTP forwarding.
+
+See [`TELEGRAM_TEMPLATES.md`](TELEGRAM_TEMPLATES.md) for template variables and examples.
 
 ## Recommended reverse proxy rule
 
