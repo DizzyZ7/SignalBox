@@ -83,12 +83,12 @@ async function loadStats() {
 
 async function loadSources() {
   const table = $("sourcesTable");
-  table.innerHTML = `<tr><td colspan="6" class="empty">Loading…</td></tr>`;
+  table.innerHTML = `<tr><td colspan="7" class="empty">Loading…</td></tr>`;
   const data = await api("/v1/sources");
   const items = data.items || [];
 
   if (!items.length) {
-    renderEmpty(table, 6);
+    renderEmpty(table, 7);
     return;
   }
 
@@ -98,6 +98,7 @@ async function loadSources() {
       <td><code title="${escapeHTML(item.id)}">${escapeHTML(shortID(item.id))}</code></td>
       <td>${item.is_active ? '<span class="badge ok">active</span>' : '<span class="badge danger">inactive</span>'}</td>
       <td>${item.telegram_chat_id ? `<code>${escapeHTML(item.telegram_chat_id)}</code>` : "—"}</td>
+      <td>${item.telegram_template ? '<span class="badge ok">custom</span>' : '<span class="badge warn">default</span>'}</td>
       <td>${item.forward_url ? `<code title="${escapeHTML(item.forward_url)}">${escapeHTML(shortID(item.forward_url))}</code>` : "—"}</td>
       <td>${item.forward_hmac_key_set ? '<span class="badge ok">enabled</span>' : '<span class="badge warn">off</span>'}</td>
     </tr>
@@ -110,8 +111,10 @@ async function createSource(event) {
   const chat = $("sourceChat").value.trim();
   const forwardUrl = $("sourceForwardUrl").value.trim();
   const forwardKey = $("sourceForwardKey").value.trim();
+  const telegramTemplate = $("sourceTemplate").value.trim();
   const payload = { name };
   if (chat) payload.telegram_chat_id = chat;
+  if (telegramTemplate) payload.telegram_template = telegramTemplate;
   if (forwardUrl) payload.forward_url = forwardUrl;
   if (forwardKey) payload.forward_hmac_key = forwardKey;
 
@@ -122,6 +125,7 @@ async function createSource(event) {
 
   $("sourceName").value = "";
   $("sourceChat").value = "";
+  $("sourceTemplate").value = "";
   $("sourceForwardUrl").value = "";
   $("sourceForwardKey").value = "";
   await loadSources();
