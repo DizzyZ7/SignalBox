@@ -19,8 +19,10 @@ SignalBox is a production-oriented Go service for receiving webhooks, storing ev
 - Manual retry endpoint for failed delivery jobs
 - OpenAPI 3.0 specification
 - Public webhook rate limiting
+- Security headers middleware
 - Health and readiness probes
 - Docker and Docker Compose setup
+- Production compose file for GHCR deployments
 - GHCR image publishing workflow
 - JSON structured logs
 - Graceful shutdown
@@ -133,6 +135,24 @@ curl -X POST http://localhost:8080/v1/sources/<SOURCE_ID>/rotate-token \
   -H "X-API-Key: <ADMIN_API_KEY>"
 ```
 
+## Production deploy
+
+Use the prebuilt image and production compose file for VPS deployments:
+
+```bash
+mkdir -p /opt/signalbox
+cd /opt/signalbox
+curl -fsSLO https://raw.githubusercontent.com/DizzyZ7/SignalBox/main/docker-compose.prod.yml
+curl -fsSLO https://raw.githubusercontent.com/DizzyZ7/SignalBox/main/.env.production.example
+cp .env.production.example .env.production
+nano .env.production
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d
+```
+
+Run SignalBox behind HTTPS through Nginx, Caddy or another reverse proxy. The production compose file binds the API to `127.0.0.1` by default.
+
+See [`docs/RUNBOOK.md`](docs/RUNBOOK.md) for operations, backups, restore, rollback and incident handling.
+
 ## Architecture
 
 ```text
@@ -160,14 +180,14 @@ make build
 Create a version tag to publish a Docker image to GHCR:
 
 ```bash
-git tag v0.9.1
-git push origin v0.9.1
+git tag v1.0.0
+git push origin v1.0.0
 ```
 
 The workflow publishes:
 
 ```text
-ghcr.io/dizzyz7/signalbox:v0.9.1
+ghcr.io/dizzyz7/signalbox:v1.0.0
 ghcr.io/dizzyz7/signalbox:latest
 ```
 
@@ -177,6 +197,7 @@ ghcr.io/dizzyz7/signalbox:latest
 - [OpenAPI](docs/openapi.yaml)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Deployment](docs/DEPLOY.md)
+- [Runbook](docs/RUNBOOK.md)
 
 ## Production notes
 
