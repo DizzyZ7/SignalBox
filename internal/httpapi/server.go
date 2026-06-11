@@ -54,6 +54,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("PATCH /v1/sources/{id}", s.admin(http.HandlerFunc(s.updateSource)))
 	mux.Handle("DELETE /v1/sources/{id}", s.admin(http.HandlerFunc(s.deleteSource)))
 	mux.Handle("POST /v1/sources/{id}/rotate-token", s.admin(http.HandlerFunc(s.rotateSourceToken)))
+	mux.Handle("POST /v1/templates/telegram/preview", s.admin(http.HandlerFunc(s.previewTelegramTemplate)))
 	mux.Handle("GET /v1/events", s.admin(http.HandlerFunc(s.listEventsCursor)))
 	mux.Handle("GET /v1/events/{id}", s.admin(http.HandlerFunc(s.getEvent)))
 	mux.Handle("POST /v1/events/{id}/replay", s.admin(http.HandlerFunc(s.replayEvent)))
