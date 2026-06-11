@@ -1,6 +1,6 @@
 # SignalBox
 
-SignalBox is a production-oriented Go service for receiving webhooks, storing events in PostgreSQL, detecting duplicate payloads, forwarding new events to Telegram through a durable delivery queue, and managing webhook sources through an admin API.
+SignalBox is a production-oriented Go service for receiving webhooks, storing events in PostgreSQL, detecting duplicate payloads, forwarding new events to Telegram or HTTP endpoints through a durable delivery queue, and managing webhook sources through an admin API.
 
 ## Features
 
@@ -17,6 +17,8 @@ SignalBox is a production-oriented Go service for receiving webhooks, storing ev
 - Prometheus-compatible `/metrics` endpoint
 - Embedded `/admin` UI
 - Optional Telegram notifications
+- Queued HTTP forwarding to external webhook URLs
+- HMAC-SHA256 signatures for HTTP forwarding
 - Postgres-backed delivery queue with retry/backoff
 - Manual retry endpoint for failed delivery jobs
 - OpenAPI 3.0 specification
@@ -77,7 +79,7 @@ Create source:
 curl -X POST http://localhost:8080/v1/sources \
   -H "X-API-Key: <ADMIN_API_KEY>" \
   -H "Content-Type: application/json" \
-  -d '{"name":"Main landing"}'
+  -d '{"name":"Main landing","forward_url":"https://example.com/webhooks/signalbox"}'
 ```
 
 Save the returned `token`. It is shown only once.
@@ -97,7 +99,7 @@ WEBHOOK_RATE_LIMIT_REQUESTS=120
 WEBHOOK_RATE_LIMIT_WINDOW=1m
 ```
 
-Telegram delivery is queued and retried by a background worker. Defaults:
+Telegram and HTTP forwarding delivery are queued and retried by a background worker. Defaults:
 
 ```env
 DELIVERY_WORKER_ENABLED=true
@@ -131,7 +133,7 @@ curl -X POST http://localhost:8080/v1/events/<EVENT_ID>/replay \
 List failed deliveries:
 
 ```bash
-curl "http://localhost:8080/v1/deliveries?status=failed&channel=telegram" \
+curl "http://localhost:8080/v1/deliveries?status=failed" \
   -H "X-API-Key: <ADMIN_API_KEY>"
 ```
 
@@ -198,7 +200,7 @@ internal/domain     domain models
 internal/security   token/id/hash helpers
 internal/ratelimit  in-memory webhook rate limiter
 internal/storage    PostgreSQL queries, migrations and delivery queue
-internal/delivery   Telegram delivery queue producer and worker
+internal/delivery   Telegram and HTTP delivery queue worker
 internal/httpapi    HTTP routing, handlers, embedded UI and metrics wrapper
 internal/metrics    lightweight Prometheus text metrics registry
 scripts             backup and restore helpers
@@ -221,6 +223,10 @@ SignalBox uses Dependabot for Go modules and GitHub Actions updates, CodeQL for 
 ## Observability
 
 SignalBox exposes Prometheus-compatible metrics at `/metrics`. See [`docs/METRICS.md`](docs/METRICS.md) for metric names, scrape examples and alert ideas.
+
+## HTTP forwarding
+
+SignalBox can forward unique accepted events to external HTTP endpoints through the same durable delivery queue as Telegram notifications. See [`docs/HTTP_FORWARDING.md`](docs/HTTP_FORWARDING.md) for headers, retry behavior and HMAC signature format.
 
 ## Releases
 
@@ -246,8 +252,9 @@ ghcr.io/dizzyz7/signalbox:latest
 - [Deployment](docs/DEPLOY.md)
 - [Runbook](docs/RUNBOOK.md)
 - [Metrics](docs/METRICS.md)
+- [HTTP forwarding](docs/HTTP_FORWARDING.md)
 - [Security policy](SECURITY.md)
 
 ## Production notes
 
-Use HTTPS before public exposure, keep webhook rate limits enabled, restrict `/metrics` and `/admin` at the reverse proxy when needed, rotate tokens if leaked, keep PostgreSQL backups enabled, keep the delivery worker enabled for Telegram notifications, and use a long random `ADMIN_API_KEY`.
+Use HTTPS before public exposure, keep webhook rate limits enabled, restrict `/metrics` and `/admin` at the reverse proxy when needed, rotate tokens if leaked, keep PostgreSQL backups enabled, keep the delivery worker enabled for Telegram and HTTP forwarding jobs, and use a long random `ADMIN_API_KEY`.
