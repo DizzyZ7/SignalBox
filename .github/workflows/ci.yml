@@ -39,3 +39,17 @@ jobs:
 
       - name: Build
         run: go build ./cmd/api
+
+  scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Bash syntax check
+        run: bash -n scripts/*.sh
+
+      - name: ShellCheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: scripts
