@@ -26,9 +26,10 @@ internal/storage
   events_cursor.go     cursor-based event listing query
   delivery_jobs.go     Postgres-backed delivery queue
   source_forwarding.go source HTTP forwarding migration
+  source_templates.go  source Telegram template migration
 
 internal/delivery
-  telegram.go          Telegram and HTTP delivery producer/worker
+  telegram.go          Telegram templating plus Telegram/HTTP delivery worker
 
 internal/httpapi
   server.go            HTTP routing, handlers, middleware
@@ -54,6 +55,7 @@ client/webhook
   -> internal/ratelimit
   -> internal/storage
   -> PostgreSQL events
+  -> internal/delivery render Telegram template if configured
   -> internal/delivery enqueue delivery_jobs rows
   -> background worker claims delivery_jobs rows
   -> Telegram API and/or HTTP forward URL
@@ -72,6 +74,18 @@ admin
 ```
 
 Replay does not create a new event row and does not change deduplication state. It only reuses the stored event and puts it back into the delivery pipeline.
+
+## Telegram template flow
+
+```text
+unique event
+  -> source.telegram_template exists
+  -> render Go text/template with Source, Event and Payload data
+  -> enqueue delivery_jobs(channel=telegram)
+  -> fallback to default message if template rendering fails
+```
+
+Template rendering happens before the Telegram job is queued, so the queue stores the exact message body that will be sent.
 
 ## HTTP forwarding flow
 
@@ -104,6 +118,7 @@ The metrics layer wraps the HTTP handler without changing business handlers. Que
 - Business-facing models live in `internal/domain`.
 - PostgreSQL-specific logic is isolated inside `internal/storage`.
 - Telegram and HTTP forwarding use the same durable delivery queue.
+- Telegram templates are stored per source and rendered with Go `text/template`.
 - HTTP handlers do validation and translate storage errors into API responses.
 - Public webhook requests are rate-limited by client IP and source token.
 - Admin API requests are separately rate-limited before API key validation.
@@ -151,6 +166,6 @@ Delivery uses the `delivery_jobs` table:
 
 - Redis-backed distributed rate limit for multi-replica deployments.
 - Separate migration files or migration CLI.
-- Telegram message templates per source.
+- Template preview endpoint for Admin UI.
 - Additional delivery providers for email, Slack or Discord.
 - Optional SQLite/WAL storage backend for single-binary deployments.
