@@ -14,6 +14,8 @@ SignalBox is a production-oriented Go service for receiving webhooks, storing ev
 - Cursor-based event pagination with legacy offset support
 - Manual event replay back into the delivery queue
 - Aggregated stats endpoint with delivery queue counters
+- Prometheus-compatible `/metrics` endpoint
+- Embedded `/admin` UI
 - Optional Telegram notifications
 - Postgres-backed delivery queue with retry/backoff
 - Manual retry endpoint for failed delivery jobs
@@ -61,6 +63,12 @@ Check API:
 ```bash
 curl http://localhost:8080/healthz
 curl http://localhost:8080/readyz
+```
+
+Open Admin UI:
+
+```text
+http://localhost:8080/admin
 ```
 
 Create source:
@@ -134,6 +142,12 @@ curl http://localhost:8080/v1/stats \
   -H "X-API-Key: <ADMIN_API_KEY>"
 ```
 
+Get Prometheus metrics:
+
+```bash
+curl http://localhost:8080/metrics
+```
+
 Rotate source token:
 
 ```bash
@@ -185,7 +199,8 @@ internal/security   token/id/hash helpers
 internal/ratelimit  in-memory webhook rate limiter
 internal/storage    PostgreSQL queries, migrations and delivery queue
 internal/delivery   Telegram delivery queue producer and worker
-internal/httpapi    HTTP routing and handlers
+internal/httpapi    HTTP routing, handlers, embedded UI and metrics wrapper
+internal/metrics    lightweight Prometheus text metrics registry
 scripts             backup and restore helpers
 .github             CI, Dependabot, CodeQL and Trivy workflows
 ```
@@ -202,6 +217,10 @@ make build
 ## Security automation
 
 SignalBox uses Dependabot for Go modules and GitHub Actions updates, CodeQL for Go security analysis, Trivy for filesystem and Docker image CVE scanning, ShellCheck for recovery scripts and a security policy for vulnerability reporting.
+
+## Observability
+
+SignalBox exposes Prometheus-compatible metrics at `/metrics`. See [`docs/METRICS.md`](docs/METRICS.md) for metric names, scrape examples and alert ideas.
 
 ## Releases
 
@@ -226,8 +245,9 @@ ghcr.io/dizzyz7/signalbox:latest
 - [Architecture](docs/ARCHITECTURE.md)
 - [Deployment](docs/DEPLOY.md)
 - [Runbook](docs/RUNBOOK.md)
+- [Metrics](docs/METRICS.md)
 - [Security policy](SECURITY.md)
 
 ## Production notes
 
-Use HTTPS before public exposure, keep webhook rate limits enabled, rotate tokens if leaked, keep PostgreSQL backups enabled, keep the delivery worker enabled for Telegram notifications, and use a long random `ADMIN_API_KEY`.
+Use HTTPS before public exposure, keep webhook rate limits enabled, restrict `/metrics` and `/admin` at the reverse proxy when needed, rotate tokens if leaked, keep PostgreSQL backups enabled, keep the delivery worker enabled for Telegram notifications, and use a long random `ADMIN_API_KEY`.
