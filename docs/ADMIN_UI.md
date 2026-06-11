@@ -15,6 +15,9 @@ The UI is embedded into the Go binary with `embed`, so it does not require Node.
 - dashboard stats
 - source list
 - source creation
+- Telegram chat id configuration
+- HTTP forward URL configuration
+- HTTP forward HMAC key configuration
 - recent event list
 - event replay
 - delivery list
@@ -31,6 +34,7 @@ The Admin UI is only a browser interface over the existing Admin API.
 - No external JavaScript is loaded.
 - API key is stored in browser local storage for convenience.
 - Use the UI only over HTTPS in production.
+- HTTP forward HMAC keys are write-only from the UI perspective: the API returns only whether the key is configured.
 
 For stricter environments, put `/admin` behind additional reverse-proxy authentication or VPN access.
 
@@ -54,6 +58,19 @@ Then enter:
 API base URL: https://signalbox.example.com
 X-API-Key: <ADMIN_API_KEY>
 ```
+
+## Creating a forwarding source
+
+In the source form, fill:
+
+```text
+Source name: GitHub events
+Telegram chat id: optional
+Forward URL: https://example.com/webhooks/signalbox
+Forward HMAC key: optional shared key for outgoing signatures
+```
+
+When `Forward URL` is configured, every unique accepted event is queued for HTTP forwarding.
 
 ## Recommended reverse proxy rule
 
