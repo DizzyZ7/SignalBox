@@ -49,7 +49,7 @@
         <div class="panel-head">
           <div>
             <h2>Sources</h2>
-            <p>Create Telegram and HTTP-forwarding sources.</p>
+            <p>Create Telegram, template and HTTP-forwarding sources.</p>
           </div>
           <button id="refreshSources" class="secondary">Refresh</button>
         </div>
@@ -59,13 +59,14 @@
           <input id="sourceChat" placeholder="Telegram chat id (optional)">
           <input id="sourceForwardUrl" placeholder="Forward URL, e.g. https://api.example.com/webhook">
           <input id="sourceForwardKey" type="password" placeholder="Forward HMAC key (optional)">
+          <textarea id="sourceTemplate" placeholder="Telegram template (optional)"></textarea>
           <button type="submit">Create</button>
         </form>
 
         <div class="table-wrap">
           <table>
             <thead>
-              <tr><th>Name</th><th>ID</th><th>Active</th><th>Telegram</th><th>HTTP forward</th><th>HMAC</th></tr>
+              <tr><th>Name</th><th>ID</th><th>Active</th><th>Telegram</th><th>Template</th><th>HTTP forward</th><th>HMAC</th></tr>
             </thead>
             <tbody id="sourcesTable"></tbody>
           </table>
@@ -140,7 +141,7 @@
   </div>
 
   <template id="emptyRowTemplate">
-    <tr><td colspan="6" class="empty">No data</td></tr>
+    <tr><td colspan="7" class="empty">No data</td></tr>
   </template>
 
   <script src="/admin/app.js"></script>
