@@ -25,9 +25,10 @@ internal/storage
   postgres.go          PostgreSQL connection, migrations, event queries
   events_cursor.go     cursor-based event listing query
   delivery_jobs.go     Postgres-backed delivery queue
+  source_forwarding.go source HTTP forwarding migration
 
 internal/delivery
-  telegram.go          Telegram delivery producer and retry worker
+  telegram.go          Telegram and HTTP delivery producer/worker
 
 internal/httpapi
   server.go            HTTP routing, handlers, middleware
@@ -53,9 +54,9 @@ client/webhook
   -> internal/ratelimit
   -> internal/storage
   -> PostgreSQL events
-  -> internal/delivery enqueue delivery_jobs row
-  -> background worker claims delivery_jobs row
-  -> Telegram API
+  -> internal/delivery enqueue delivery_jobs rows
+  -> background worker claims delivery_jobs rows
+  -> Telegram API and/or HTTP forward URL
   -> sent or retry with backoff
 ```
 
@@ -71,6 +72,19 @@ admin
 ```
 
 Replay does not create a new event row and does not change deduplication state. It only reuses the stored event and puts it back into the delivery pipeline.
+
+## HTTP forwarding flow
+
+```text
+unique event
+  -> source.forward_url exists
+  -> delivery_jobs(channel=http, destination=forward_url)
+  -> worker sends original JSON payload
+  -> optional HMAC-SHA256 signature headers
+  -> retry/backoff on non-2xx responses
+```
+
+HTTP forwarding reuses the same persistent queue as Telegram delivery. The target endpoint can verify `X-SignalBox-Signature` when `forward_hmac_key` is configured.
 
 ## Observability flow
 
@@ -89,7 +103,7 @@ The metrics layer wraps the HTTP handler without changing business handlers. Que
 - `cmd/api/main.go` only wires dependencies, starts the HTTP server and starts the delivery worker.
 - Business-facing models live in `internal/domain`.
 - PostgreSQL-specific logic is isolated inside `internal/storage`.
-- Telegram delivery is isolated behind a notifier interface and backed by a durable queue.
+- Telegram and HTTP forwarding use the same durable delivery queue.
 - HTTP handlers do validation and translate storage errors into API responses.
 - Public webhook requests are rate-limited by client IP and source token.
 - Admin API requests are separately rate-limited before API key validation.
@@ -102,9 +116,9 @@ The metrics layer wraps the HTTP handler without changing business handlers. Que
 
 ## Delivery reliability
 
-Telegram delivery uses the `delivery_jobs` table:
+Delivery uses the `delivery_jobs` table:
 
-- new unique events enqueue a Telegram job;
+- new unique events enqueue Telegram and/or HTTP jobs depending on source settings;
 - admin replay can enqueue another job for an existing event;
 - worker claims jobs with `FOR UPDATE SKIP LOCKED`;
 - jobs are locked with `locked_until` to avoid double processing;
@@ -138,5 +152,5 @@ Telegram delivery uses the `delivery_jobs` table:
 - Redis-backed distributed rate limit for multi-replica deployments.
 - Separate migration files or migration CLI.
 - Telegram message templates per source.
-- Delivery provider abstraction for email, Slack, Discord or webhooks.
+- Additional delivery providers for email, Slack or Discord.
 - Optional SQLite/WAL storage backend for single-binary deployments.
