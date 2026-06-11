@@ -82,10 +82,11 @@ func (s *Server) ready(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) createSource(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		Name           string  `json:"name"`
-		TelegramChatID *string `json:"telegram_chat_id"`
-		ForwardURL     *string `json:"forward_url"`
-		ForwardHMACKey *string `json:"forward_hmac_key"`
+		Name             string  `json:"name"`
+		TelegramChatID   *string `json:"telegram_chat_id"`
+		TelegramTemplate *string `json:"telegram_template"`
+		ForwardURL       *string `json:"forward_url"`
+		ForwardHMACKey   *string `json:"forward_hmac_key"`
 	}
 
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64*1024)).Decode(&input); err != nil {
@@ -99,6 +100,10 @@ func (s *Server) createSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	telegramTemplate, ok := normalizeTelegramTemplate(w, r, input.TelegramTemplate)
+	if !ok {
+		return
+	}
 	forwardURL, ok := normalizeForwardURL(w, r, input.ForwardURL)
 	if !ok {
 		return
@@ -110,7 +115,7 @@ func (s *Server) createSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	source, err := s.repo.CreateSource(r.Context(), name, normalizePtr(input.TelegramChatID), forwardURL, normalizePtr(input.ForwardHMACKey), token)
+	source, err := s.repo.CreateSource(r.Context(), name, normalizePtr(input.TelegramChatID), telegramTemplate, forwardURL, normalizePtr(input.ForwardHMACKey), token)
 	if err != nil {
 		s.log.Error("create source failed", slog.String("error", err.Error()))
 		writeError(w, http.StatusInternalServerError, "internal error", requestID(r))
@@ -149,11 +154,12 @@ func (s *Server) updateSource(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var input struct {
-		Name           *string `json:"name"`
-		TelegramChatID *string `json:"telegram_chat_id"`
-		ForwardURL     *string `json:"forward_url"`
-		ForwardHMACKey *string `json:"forward_hmac_key"`
-		IsActive       *bool   `json:"is_active"`
+		Name             *string `json:"name"`
+		TelegramChatID   *string `json:"telegram_chat_id"`
+		TelegramTemplate *string `json:"telegram_template"`
+		ForwardURL       *string `json:"forward_url"`
+		ForwardHMACKey   *string `json:"forward_hmac_key"`
+		IsActive         *bool   `json:"is_active"`
 	}
 
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64*1024)).Decode(&input); err != nil {
@@ -161,7 +167,7 @@ func (s *Server) updateSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if input.Name == nil && input.TelegramChatID == nil && input.ForwardURL == nil && input.ForwardHMACKey == nil && input.IsActive == nil {
+	if input.Name == nil && input.TelegramChatID == nil && input.TelegramTemplate == nil && input.ForwardURL == nil && input.ForwardHMACKey == nil && input.IsActive == nil {
 		writeError(w, http.StatusBadRequest, "at least one field is required", requestID(r))
 		return
 	}
@@ -190,6 +196,15 @@ func (s *Server) updateSource(w http.ResponseWriter, r *http.Request) {
 		chat = normalizePtr(input.TelegramChatID)
 	}
 
+	telegramTemplate := current.TelegramTemplate
+	if input.TelegramTemplate != nil {
+		var ok bool
+		telegramTemplate, ok = normalizeTelegramTemplate(w, r, input.TelegramTemplate)
+		if !ok {
+			return
+		}
+	}
+
 	forwardURL := current.ForwardURL
 	if input.ForwardURL != nil {
 		var ok bool
@@ -209,7 +224,7 @@ func (s *Server) updateSource(w http.ResponseWriter, r *http.Request) {
 		active = *input.IsActive
 	}
 
-	out, err := s.repo.UpdateSource(r.Context(), id, name, chat, forwardURL, forwardHMACKey, active)
+	out, err := s.repo.UpdateSource(r.Context(), id, name, chat, telegramTemplate, forwardURL, forwardHMACKey, active)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error", requestID(r))
 		return
@@ -565,6 +580,21 @@ func normalizePtr(value *string) *string {
 		return nil
 	}
 	return stringPtr(*value)
+}
+
+func normalizeTelegramTemplate(w http.ResponseWriter, r *http.Request, value *string) (*string, bool) {
+	if value == nil {
+		return nil, true
+	}
+	trimmed := strings.TrimSpace(*value)
+	if trimmed == "" {
+		return nil, true
+	}
+	if len(trimmed) > 4000 {
+		writeError(w, http.StatusBadRequest, "telegram_template must be shorter than 4000 characters", requestID(r))
+		return nil, false
+	}
+	return &trimmed, true
 }
 
 func normalizeForwardURL(w http.ResponseWriter, r *http.Request, value *string) (*string, bool) {
