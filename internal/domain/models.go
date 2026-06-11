@@ -6,19 +6,19 @@ import (
 )
 
 type Source struct {
-	ID                      int64     `json:"-"`
-	PublicID                string    `json:"id"`
-	Name                    string    `json:"name"`
-	TokenHash               string    `json:"-"`
-	TokenHint               string    `json:"token_hint"`
-	TelegramChatID          *string   `json:"telegram_chat_id,omitempty"`
-	ForwardURL              *string   `json:"forward_url,omitempty"`
-	ForwardSigningSecret    *string   `json:"-"`
-	ForwardSigningSecretSet bool      `json:"forward_signing_secret_set"`
-	IsActive                bool      `json:"is_active"`
-	CreatedAt               time.Time `json:"created_at"`
-	UpdatedAt               time.Time `json:"updated_at"`
-	Token                   string    `json:"token,omitempty"`
+	ID                int64     `json:"-"`
+	PublicID          string    `json:"id"`
+	Name              string    `json:"name"`
+	TokenHash         string    `json:"-"`
+	TokenHint         string    `json:"token_hint"`
+	TelegramChatID    *string   `json:"telegram_chat_id,omitempty"`
+	ForwardURL        *string   `json:"forward_url,omitempty"`
+	ForwardHMACKey    *string   `json:"-"`
+	ForwardHMACKeySet bool      `json:"forward_hmac_key_set"`
+	IsActive          bool      `json:"is_active"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+	Token             string    `json:"token,omitempty"`
 }
 
 type Event struct {
