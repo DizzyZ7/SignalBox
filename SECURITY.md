@@ -39,7 +39,7 @@ SignalBox is designed with the following baseline:
 - API responses use `Cache-Control: no-store`;
 - security headers are set by the application;
 - PostgreSQL data can be backed up and restored with checked scripts;
-- CI runs Go checks, shell script checks and CodeQL analysis.
+- CI runs Go checks, shell script checks, CodeQL analysis and Trivy filesystem/image scans.
 
 ## Operational recommendations
 
@@ -50,5 +50,5 @@ For production deployments:
 - rotate tokens if exposed;
 - keep PostgreSQL backups outside the VPS;
 - test restore procedures;
-- keep Dependabot and CodeQL alerts enabled;
+- keep Dependabot, CodeQL and Trivy alerts enabled;
 - review failed deliveries and replay events when needed.
