@@ -31,6 +31,10 @@ Download deployment files:
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/DizzyZ7/SignalBox/main/docker-compose.prod.yml
 curl -fsSLO https://raw.githubusercontent.com/DizzyZ7/SignalBox/main/.env.production.example
+mkdir -p scripts
+curl -fsSLo scripts/backup-postgres.sh https://raw.githubusercontent.com/DizzyZ7/SignalBox/main/scripts/backup-postgres.sh
+curl -fsSLo scripts/restore-postgres.sh https://raw.githubusercontent.com/DizzyZ7/SignalBox/main/scripts/restore-postgres.sh
+chmod +x scripts/*.sh
 cp .env.production.example .env.production
 ```
 
@@ -180,47 +184,54 @@ Use delivery retry when a specific delivery job failed. Use event replay when yo
 
 ## PostgreSQL backup
 
-Create a backup:
+Create a compressed backup with checksum:
 
 ```bash
-mkdir -p backups
-docker compose --env-file .env.production -f docker-compose.prod.yml exec -T postgres \
-  pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > backups/signalbox-$(date +%F-%H%M%S).sql
+./scripts/backup-postgres.sh
 ```
 
-Verify that the backup file is not empty:
+The script creates:
+
+```text
+backups/signalbox-YYYYMMDDTHHMMSSZ.sql.gz
+backups/signalbox-YYYYMMDDTHHMMSSZ.sql.gz.sha256
+```
+
+Override defaults when needed:
 
 ```bash
-ls -lh backups/
+BACKUP_DIR=/mnt/backups/signalbox RETENTION_DAYS=30 ./scripts/backup-postgres.sh
 ```
 
 Recommended backup policy for a beta deployment:
 
-- daily backup;
-- keep at least 7 daily backups;
+- run backup at least once per day;
+- keep at least 7-14 daily backups;
 - copy backups outside the VPS;
+- verify checksums;
 - test restore before relying on backups.
+
+Example cron job:
+
+```cron
+15 3 * * * cd /opt/signalbox && /opt/signalbox/scripts/backup-postgres.sh >> /var/log/signalbox-backup.log 2>&1
+```
 
 ## PostgreSQL restore
 
-Stop API to avoid writes during restore:
+Restore is intentionally protected by `CONFIRM_RESTORE=YES` because it is destructive.
 
 ```bash
-docker compose --env-file .env.production -f docker-compose.prod.yml stop api
+CONFIRM_RESTORE=YES ./scripts/restore-postgres.sh backups/signalbox-YYYYMMDDTHHMMSSZ.sql.gz
 ```
 
-Restore from backup:
+The restore script:
 
-```bash
-cat backups/signalbox-YYYY-MM-DD-HHMMSS.sql | docker compose --env-file .env.production -f docker-compose.prod.yml exec -T postgres \
-  psql -U "$POSTGRES_USER" "$POSTGRES_DB"
-```
-
-Start API again:
-
-```bash
-docker compose --env-file .env.production -f docker-compose.prod.yml start api
-```
+- verifies gzip archive integrity;
+- verifies `.sha256` when it exists;
+- stops the API before restore;
+- restores using `psql` with `ON_ERROR_STOP=1`;
+- starts the API again after restore.
 
 ## Rollback
 
