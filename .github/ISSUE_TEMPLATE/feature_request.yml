@@ -1,0 +1,73 @@
+name: Feature request
+description: Suggest an improvement or new capability for SignalBox
+title: "feature: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping shape SignalBox. Please describe the user problem first, not only the desired implementation.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user problem should this solve?
+      placeholder: As a self-hosted SignalBox operator, I need...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What should SignalBox do?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - webhook ingestion
+        - event storage
+        - deduplication
+        - delivery provider
+        - Telegram
+        - HTTP forwarding
+        - Slack/Discord/email provider
+        - Admin API
+        - Admin UI
+        - audit log
+        - metrics
+        - deployment
+        - documentation
+        - other
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What other approaches did you consider?
+
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Use case
+      description: Describe the real scenario where this feature would be used.
+      placeholder: We receive webhooks from... and need to...
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: This fits SignalBox as a lightweight self-hosted webhook/event gateway.
+          required: true
+        - label: This does not require logging or exposing secrets.
+          required: true
