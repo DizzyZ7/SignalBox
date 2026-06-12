@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/DizzyZ7/SignalBox/security/policy
+    about: Please do not open public issues for security vulnerabilities.
+  - name: Documentation
+    url: https://github.com/DizzyZ7/SignalBox/tree/main/docs
+    about: Check the docs before opening an issue.
