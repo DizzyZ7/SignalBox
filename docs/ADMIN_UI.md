@@ -27,6 +27,7 @@ The UI is embedded into the Go binary with `embed`, so it does not require Node.
 - recent event list
 - event replay
 - delivery list
+- delivery filters by status, channel, source public ID and event public ID
 - failed/pending delivery retry
 - local activity log
 
@@ -161,6 +162,21 @@ After a successful test, the UI refreshes:
 ```
 
 This is useful for checking Telegram delivery, HTTP forwarding and templates without using curl or exposing the source token.
+
+## Filtering deliveries
+
+The delivery panel supports filtering by:
+
+```text
+- status: failed, pending, processing, sent or all
+- channel: telegram, http or any custom channel
+- source public ID
+- event public ID
+```
+
+Press `Enter` inside text filters to reload the list. Status changes reload automatically.
+
+These filters are intended for production incident response. For example, when a customer says one integration stopped receiving events, filter deliveries by the source public ID and failed status, then retry only the affected jobs.
 
 ## Recommended reverse proxy rule
 
