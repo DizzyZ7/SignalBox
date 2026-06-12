@@ -243,7 +243,7 @@ label {
   flex-wrap: wrap;
 }
 
-.editor-card, .preview-card {
+.editor-card, .preview-card, .test-event-card {
   margin-bottom: 14px;
   border: 1px solid var(--border);
   border-radius: 16px;
@@ -263,6 +263,23 @@ label {
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.test-event-card .json-editor {
+  display: block;
+  width: calc(100% - 28px);
+  min-height: 210px;
+  margin: 14px;
+  grid-column: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  tab-size: 2;
+}
+
+.hint {
+  margin: -2px 14px 14px;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .action-row {
