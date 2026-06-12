@@ -62,7 +62,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /v1/deliveries", s.admin(http.HandlerFunc(s.listDeliveries)))
 	mux.Handle("GET /v1/deliveries/{id}", s.admin(http.HandlerFunc(s.getDelivery)))
 	mux.Handle("POST /v1/deliveries/{id}/retry", s.admin(http.HandlerFunc(s.retryDelivery)))
-	mux.Handle("GET /v1/stats", s.admin(http.HandlerFunc(s.stats)))
+	mux.Handle("GET /v1/audit", s.admin(http.HandlerFunc(s.listAdminAuditEvents)))
+ mux.Handle("GET /v1/stats", s.admin(http.HandlerFunc(s.stats)))
 	return s.accessLog(s.recover(s.securityHeaders(s.requestID(mux))))
 }
 
@@ -482,7 +483,9 @@ func (s *Server) admin(next http.Handler) http.Handler {
 			return
 		}
 
-		next.ServeHTTP(w, r)
+		rw := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(rw, r)
+		s.recordAdminAudit(r, rw.status)
 	})
 }
 
