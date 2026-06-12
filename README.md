@@ -32,7 +32,7 @@ Use SignalBox when you need:
 - Source tokens stored only as SHA-256 hashes
 - Source update, disable and token rotation endpoints
 - PostgreSQL event storage
-- Duplicate detection without losing audit records
+- Duplicate detection without losing duplicate audit records
 - Event filters by source, type, origin, duplicate flag and time range
 - Cursor-based event pagination with legacy offset support
 - Manual event replay back into the delivery queue
@@ -44,7 +44,9 @@ Use SignalBox when you need:
 - Per-source Telegram message templates
 - Queued HTTP forwarding to external webhook URLs
 - HMAC-SHA256 signatures for HTTP forwarding
+- SSRF guard for HTTP forwarding destinations
 - Postgres-backed delivery queue with retry/backoff
+- Delivery filters by status, channel, source and event
 - Manual retry endpoint for failed delivery jobs
 - OpenAPI 3.0 specification
 - Public webhook rate limiting
@@ -77,12 +79,6 @@ Use SignalBox when you need:
 cp .env.example .env
 # edit ADMIN_API_KEY in .env
 docker compose --env-file .env up --build
-```
-
-Released Docker images are published to GHCR:
-
-```bash
-docker pull ghcr.io/dizzyz7/signalbox:latest
 ```
 
 Check API:
@@ -141,13 +137,6 @@ curl "http://localhost:8080/v1/events?type=lead.created&duplicate=false&limit=50
   -H "X-API-Key: <ADMIN_API_KEY>"
 ```
 
-Next page with cursor:
-
-```bash
-curl "http://localhost:8080/v1/events?limit=50&cursor=<NEXT_CURSOR>" \
-  -H "X-API-Key: <ADMIN_API_KEY>"
-```
-
 Replay an event into the delivery queue:
 
 ```bash
@@ -193,17 +182,11 @@ curl -X POST http://localhost:8080/v1/sources/<SOURCE_ID>/rotate-token \
 
 ## Production deploy
 
-Use the prebuilt image and production compose file for VPS deployments:
+Use the prebuilt GHCR image or the production Compose file from this repository.
 
 ```bash
-mkdir -p /opt/signalbox
-cd /opt/signalbox
-curl -fsSLO https://raw.githubusercontent.com/DizzyZ7/SignalBox/main/docker-compose.prod.yml
-curl -fsSLO https://raw.githubusercontent.com/DizzyZ7/SignalBox/main/.env.production.example
-mkdir -p scripts
-curl -fsSLo scripts/backup-postgres.sh https://raw.githubusercontent.com/DizzyZ7/SignalBox/main/scripts/backup-postgres.sh
-curl -fsSLo scripts/restore-postgres.sh https://raw.githubusercontent.com/DizzyZ7/SignalBox/main/scripts/restore-postgres.sh
-chmod +x scripts/*.sh
+git clone https://github.com/DizzyZ7/SignalBox.git
+cd SignalBox
 cp .env.production.example .env.production
 nano .env.production
 docker compose --env-file .env.production -f docker-compose.prod.yml up -d
@@ -231,7 +214,7 @@ See [`docs/RUNBOOK.md`](docs/RUNBOOK.md) for operations, backups, restore, rollb
 cmd/api             app bootstrap
 internal/config     environment loading
 internal/domain     domain models
-internal/security   token/id/hash helpers
+internal/security   token/id/hash/forward URL safety helpers
 internal/ratelimit  in-memory webhook rate limiter
 internal/storage    PostgreSQL queries, migrations and delivery queue
 internal/delivery   Telegram and HTTP delivery queue worker
@@ -264,7 +247,7 @@ SignalBox supports per-source Telegram message templates using Go `text/template
 
 ## HTTP forwarding
 
-SignalBox can forward unique accepted events to external HTTP endpoints through the same durable delivery queue as Telegram notifications. See [`docs/HTTP_FORWARDING.md`](docs/HTTP_FORWARDING.md) for headers, retry behavior and HMAC signature format.
+SignalBox can forward unique accepted events to external HTTP endpoints through the same durable delivery queue as Telegram notifications. Forwarding includes HMAC signatures and SSRF protection for local/private destinations. See [`docs/HTTP_FORWARDING.md`](docs/HTTP_FORWARDING.md).
 
 ## Releases
 
@@ -291,3 +274,5 @@ ghcr.io/dizzyz7/signalbox:latest
 - [Runbook](docs/RUNBOOK.md)
 - [Metrics](docs/METRICS.md)
 - [Telegram templates](docs/TELEGRAM_TEMPLATES.md)
+- [HTTP forwarding](docs/HTTP_FORWARDING.md)
+- [Enterprise readiness audit](docs/ENTERPRISE_AUDIT.md)
