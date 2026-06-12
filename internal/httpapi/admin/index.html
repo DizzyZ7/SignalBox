@@ -155,7 +155,7 @@
           <button id="refreshDeliveries" class="secondary">Refresh</button>
         </div>
 
-        <div class="filters">
+        <div class="filters delivery-filters">
           <select id="deliveryStatusFilter">
             <option value="failed">failed</option>
             <option value="pending">pending</option>
@@ -164,6 +164,8 @@
             <option value="">all</option>
           </select>
           <input id="deliveryChannelFilter" value="" placeholder="channel: telegram/http/all">
+          <input id="deliverySourceFilter" value="" placeholder="source public id">
+          <input id="deliveryEventFilter" value="" placeholder="event public id">
         </div>
 
         <div class="table-wrap">
