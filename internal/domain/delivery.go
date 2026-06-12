@@ -29,4 +29,6 @@ type DeliveryJobFilter struct {
 	Offset  int
 	Status  string
 	Channel string
+	Source  string
+	EventID string
 }
