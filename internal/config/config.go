@@ -8,38 +8,40 @@ import (
 )
 
 type Config struct {
-	HTTPAddr                   string
-	DatabaseURL                string
-	AdminAPIKey                string
-	AutoMigrate                bool
-	TelegramBotToken           string
-	TelegramDefaultChatID      string
-	MaxBodyBytes               int64
-	WebhookRateLimitRequests   int
-	WebhookRateLimitWindow     time.Duration
-	DeliveryWorkerEnabled      bool
-	DeliveryWorkerInterval     time.Duration
-	DeliveryWorkerBatchSize    int
-	DeliveryWorkerLockDuration time.Duration
-	DeliveryMaxAttempts        int
+	HTTPAddr                    string
+	DatabaseURL                 string
+	AdminAPIKey                 string
+	AutoMigrate                 bool
+	TelegramBotToken            string
+	TelegramDefaultChatID       string
+	MaxBodyBytes                int64
+	WebhookRateLimitRequests    int
+	WebhookRateLimitWindow      time.Duration
+	DeliveryWorkerEnabled       bool
+	DeliveryWorkerInterval      time.Duration
+	DeliveryWorkerBatchSize     int
+	DeliveryWorkerLockDuration  time.Duration
+	DeliveryMaxAttempts         int
+	ForwardAllowPrivateNetworks bool
 }
 
 func Load() (Config, error) {
 	cfg := Config{
-		HTTPAddr:                   env("HTTP_ADDR", ":8080"),
-		DatabaseURL:                os.Getenv("DATABASE_URL"),
-		AdminAPIKey:                os.Getenv("ADMIN_API_KEY"),
-		AutoMigrate:                envBool("AUTO_MIGRATE", false),
-		TelegramBotToken:           os.Getenv("TELEGRAM_BOT_TOKEN"),
-		TelegramDefaultChatID:      os.Getenv("TELEGRAM_DEFAULT_CHAT_ID"),
-		MaxBodyBytes:               envInt64("MAX_BODY_BYTES", 1<<20),
-		WebhookRateLimitRequests:   envInt("WEBHOOK_RATE_LIMIT_REQUESTS", 120),
-		WebhookRateLimitWindow:     envDuration("WEBHOOK_RATE_LIMIT_WINDOW", time.Minute),
-		DeliveryWorkerEnabled:      envBool("DELIVERY_WORKER_ENABLED", true),
-		DeliveryWorkerInterval:     envDuration("DELIVERY_WORKER_INTERVAL", 5*time.Second),
-		DeliveryWorkerBatchSize:    envInt("DELIVERY_WORKER_BATCH_SIZE", 10),
-		DeliveryWorkerLockDuration: envDuration("DELIVERY_WORKER_LOCK_DURATION", time.Minute),
-		DeliveryMaxAttempts:        envInt("DELIVERY_MAX_ATTEMPTS", 8),
+		HTTPAddr:                    env("HTTP_ADDR", ":8080"),
+		DatabaseURL:                 os.Getenv("DATABASE_URL"),
+		AdminAPIKey:                 os.Getenv("ADMIN_API_KEY"),
+		AutoMigrate:                 envBool("AUTO_MIGRATE", false),
+		TelegramBotToken:            os.Getenv("TELEGRAM_BOT_TOKEN"),
+		TelegramDefaultChatID:       os.Getenv("TELEGRAM_DEFAULT_CHAT_ID"),
+		MaxBodyBytes:                envInt64("MAX_BODY_BYTES", 1<<20),
+		WebhookRateLimitRequests:    envInt("WEBHOOK_RATE_LIMIT_REQUESTS", 120),
+		WebhookRateLimitWindow:      envDuration("WEBHOOK_RATE_LIMIT_WINDOW", time.Minute),
+		DeliveryWorkerEnabled:       envBool("DELIVERY_WORKER_ENABLED", true),
+		DeliveryWorkerInterval:      envDuration("DELIVERY_WORKER_INTERVAL", 5*time.Second),
+		DeliveryWorkerBatchSize:     envInt("DELIVERY_WORKER_BATCH_SIZE", 10),
+		DeliveryWorkerLockDuration:  envDuration("DELIVERY_WORKER_LOCK_DURATION", time.Minute),
+		DeliveryMaxAttempts:         envInt("DELIVERY_MAX_ATTEMPTS", 8),
+		ForwardAllowPrivateNetworks: envBool("FORWARD_ALLOW_PRIVATE_NETWORKS", false),
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, errors.New("DATABASE_URL is required")
