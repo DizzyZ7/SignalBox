@@ -1,0 +1,20 @@
+{
+  "type": "checkout.completed",
+  "external_id": "checkout_demo_2001",
+  "customer": {
+    "id": "customer_demo_01",
+    "email": "customer.demo@example.com"
+  },
+  "amount": {
+    "value": 4900,
+    "currency": "USD"
+  },
+  "items": [
+    {
+      "sku": "signalbox-pro-demo",
+      "name": "SignalBox Pro Demo",
+      "quantity": 1
+    }
+  ],
+  "status": "paid"
+}
