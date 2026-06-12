@@ -1,0 +1,16 @@
+{
+  "type": "monitoring.alert",
+  "severity": "critical",
+  "service": "payments-api",
+  "environment": "production",
+  "summary": "Error rate is above threshold",
+  "labels": {
+    "team": "platform",
+    "region": "eu-central"
+  },
+  "metrics": {
+    "error_rate": 0.12,
+    "threshold": 0.05,
+    "window": "5m"
+  }
+}
