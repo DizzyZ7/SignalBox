@@ -2,6 +2,29 @@
 
 SignalBox is a production-oriented Go service for receiving webhooks, storing events in PostgreSQL, detecting duplicate payloads, forwarding new events to Telegram or HTTP endpoints through a durable delivery queue, and managing webhook sources through an admin API.
 
+It is built for teams that need a compact self-hosted webhook gateway without pulling in a heavy event platform, Redis stack or separate frontend build.
+
+## Why SignalBox
+
+Modern products receive webhooks from GitHub, GitLab, Stripe, payment providers, CRMs, monitoring systems, landing pages and internal services. In many teams this turns into repeated glue code: verify a token, store the payload, deduplicate, retry delivery, notify Telegram, inspect failures and keep enough audit trail for incidents.
+
+SignalBox packages that operational layer into one small Go service:
+
+```text
+Incoming webhook -> Rate limit -> Token hash lookup -> Deduplication -> PostgreSQL event log -> Delivery queue -> Telegram / HTTP forwarding
+```
+
+Use SignalBox when you need:
+
+- a lightweight Go-native webhook inbox;
+- durable event storage and replay;
+- deduplication without losing duplicate audit records;
+- Telegram alerts with per-source templates;
+- HTTP forwarding with HMAC signatures;
+- retry/backoff queue semantics;
+- an embedded admin console without Node, npm or a second UI container;
+- a service that can be deployed on a small VPS or inside a larger production stack.
+
 ## Features
 
 - Public webhook URL per source
@@ -16,6 +39,7 @@ SignalBox is a production-oriented Go service for receiving webhooks, storing ev
 - Aggregated stats endpoint with delivery queue counters
 - Prometheus-compatible `/metrics` endpoint
 - Embedded `/admin` UI
+- Editable source test events from the Admin UI
 - Optional Telegram notifications
 - Per-source Telegram message templates
 - Queued HTTP forwarding to external webhook URLs
@@ -129,6 +153,15 @@ Replay an event into the delivery queue:
 ```bash
 curl -X POST http://localhost:8080/v1/events/<EVENT_ID>/replay \
   -H "X-API-Key: <ADMIN_API_KEY>"
+```
+
+Send a source test event without exposing the public webhook token:
+
+```bash
+curl -X POST http://localhost:8080/v1/sources/<SOURCE_ID>/test-event \
+  -H "X-API-Key: <ADMIN_API_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '{"payload":{"type":"signalbox.test","source":"admin","external_id":"test-1"}}'
 ```
 
 List failed deliveries:
@@ -258,9 +291,3 @@ ghcr.io/dizzyz7/signalbox:latest
 - [Runbook](docs/RUNBOOK.md)
 - [Metrics](docs/METRICS.md)
 - [Telegram templates](docs/TELEGRAM_TEMPLATES.md)
-- [HTTP forwarding](docs/HTTP_FORWARDING.md)
-- [Security policy](SECURITY.md)
-
-## Production notes
-
-Use HTTPS before public exposure, keep webhook rate limits enabled, restrict `/metrics` and `/admin` at the reverse proxy when needed, rotate tokens if leaked, keep PostgreSQL backups enabled, keep the delivery worker enabled for Telegram and HTTP forwarding jobs, and use a long random `ADMIN_API_KEY`.
