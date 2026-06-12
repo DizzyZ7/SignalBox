@@ -1,0 +1,14 @@
+{
+  "type": "lead.created",
+  "source": "landing-page",
+  "external_id": "lead_demo_1001",
+  "name": "Alex Demo",
+  "email": "alex.demo@example.com",
+  "company": "Demo Company",
+  "message": "I want to try SignalBox for webhook delivery.",
+  "utm": {
+    "source": "github",
+    "medium": "demo",
+    "campaign": "signalbox-examples"
+  }
+}
