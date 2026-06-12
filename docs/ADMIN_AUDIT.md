@@ -1,6 +1,6 @@
 # Admin Audit Log
 
-SignalBox includes an admin audit log foundation for enterprise operations and incident response.
+SignalBox includes an admin audit log for enterprise operations and incident response.
 
 The audit log is designed to answer questions such as:
 
@@ -98,6 +98,26 @@ Response:
 }
 ```
 
+## Admin UI
+
+The embedded Admin UI includes an `Admin audit log` panel.
+
+Open:
+
+```text
+/admin
+```
+
+The panel shows recent mutating admin actions and supports filters:
+
+```text
+action
+target type
+target public id
+```
+
+Use it during incident response to quickly find who changed a source, rotated a token, replayed an event or retried a delivery.
+
 ## Security notes
 
 The audit log must not store secrets.
@@ -123,9 +143,4 @@ During incident response:
 
 ## Implementation status
 
-The domain, storage and HTTP handler are implemented. The final activation step is wiring the route and middleware in `internal/httpapi/server.go`:
-
-```text
-GET /v1/audit
-record mutating admin requests after successful/failed handler execution
-```
+The domain, storage, HTTP handler, route, middleware and Admin UI panel are implemented.
