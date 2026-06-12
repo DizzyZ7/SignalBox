@@ -86,6 +86,68 @@ function installAuditAutoRefresh() {
   window.api = auditedAPI;
 }
 
+function selectedSourceIDForInvestigation() {
+  const id = state?.selectedSourceId || "";
+  if (!id) {
+    log("select a source first", "error");
+    return "";
+  }
+  return id;
+}
+
+function scrollToPanel(title) {
+  const panels = Array.from(document.querySelectorAll(".panel"));
+  const panel = panels.find((item) => item.querySelector("h2")?.textContent === title);
+  if (panel) {
+    panel.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+
+function addInvestigationButton(container, id, label, handler) {
+  if (document.getElementById(id)) {
+    return;
+  }
+  const button = document.createElement("button");
+  button.type = "button";
+  button.id = id;
+  button.className = "secondary";
+  button.textContent = label;
+  button.addEventListener("click", handler);
+  container.insertBefore(button, document.getElementById("saveSourceEdit"));
+}
+
+function installSourceInvestigationShortcuts() {
+  const actions = document.getElementById("saveSourceEdit")?.parentElement;
+  if (!actions) {
+    return;
+  }
+
+  addInvestigationButton(actions, "filterSourceEvents", "Source events", () => {
+    const id = selectedSourceIDForInvestigation();
+    if (!id) return;
+    document.getElementById("sourceFilter").value = id;
+    loadEvents().catch((err) => log(err.message, "error"));
+    scrollToPanel("Events");
+  });
+
+  addInvestigationButton(actions, "filterSourceDeliveries", "Source deliveries", () => {
+    const id = selectedSourceIDForInvestigation();
+    if (!id) return;
+    document.getElementById("deliverySourceFilter").value = id;
+    loadDeliveries().catch((err) => log(err.message, "error"));
+    scrollToPanel("Deliveries");
+  });
+
+  addInvestigationButton(actions, "filterSourceAudit", "Source audit", () => {
+    const id = selectedSourceIDForInvestigation();
+    if (!id) return;
+    document.getElementById("auditTargetTypeFilter").value = "source";
+    document.getElementById("auditTargetIdFilter").value = id;
+    loadAudit().catch((err) => log(err.message, "error"));
+    scrollToPanel("Admin audit log");
+  });
+}
+
 function initAuditUI() {
   const refreshButton = document.getElementById("refreshAudit");
   if (!refreshButton) {
@@ -93,6 +155,7 @@ function initAuditUI() {
   }
 
   installAuditAutoRefresh();
+  installSourceInvestigationShortcuts();
 
   refreshButton.addEventListener("click", () => loadAudit().catch((err) => log(err.message, "error")));
   document.getElementById("auditActionFilter").addEventListener("keydown", (event) => {
