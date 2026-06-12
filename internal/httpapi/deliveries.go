@@ -78,7 +78,17 @@ func parseDeliveryJobFilter(w http.ResponseWriter, r *http.Request) (domain.Deli
 		writeError(w, http.StatusBadRequest, "channel must be shorter than 50 characters", requestID(r))
 		return domain.DeliveryJobFilter{}, false
 	}
-	return domain.DeliveryJobFilter{Limit: limit, Offset: offset, Status: status, Channel: channel}, true
+	source := strings.TrimSpace(r.URL.Query().Get("source"))
+	if len(source) > 120 {
+		writeError(w, http.StatusBadRequest, "source must be shorter than 120 characters", requestID(r))
+		return domain.DeliveryJobFilter{}, false
+	}
+	eventID := strings.TrimSpace(r.URL.Query().Get("event_id"))
+	if len(eventID) > 120 {
+		writeError(w, http.StatusBadRequest, "event_id must be shorter than 120 characters", requestID(r))
+		return domain.DeliveryJobFilter{}, false
+	}
+	return domain.DeliveryJobFilter{Limit: limit, Offset: offset, Status: status, Channel: channel, Source: source, EventID: eventID}, true
 }
 
 func allowedDeliveryStatus(status string) bool {
