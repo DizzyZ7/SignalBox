@@ -387,8 +387,12 @@ async function loadDeliveries() {
   const params = new URLSearchParams({ limit: "25" });
   const status = $("deliveryStatusFilter").value.trim();
   const channel = $("deliveryChannelFilter").value.trim();
+  const source = $("deliverySourceFilter").value.trim();
+  const eventID = $("deliveryEventFilter").value.trim();
   if (status) params.set("status", status);
   if (channel) params.set("channel", channel);
+  if (source) params.set("source", source);
+  if (eventID) params.set("event_id", eventID);
 
   const data = await api(`/v1/deliveries?${params.toString()}`);
   const items = data.items || [];
@@ -486,6 +490,8 @@ function init() {
   $("sourceFilter").addEventListener("keydown", (e) => { if (e.key === "Enter") loadEvents().catch((err) => log(err.message, "error")); });
   $("deliveryStatusFilter").addEventListener("change", () => loadDeliveries().catch((e) => log(e.message, "error")));
   $("deliveryChannelFilter").addEventListener("keydown", (e) => { if (e.key === "Enter") loadDeliveries().catch((err) => log(err.message, "error")); });
+  $("deliverySourceFilter").addEventListener("keydown", (e) => { if (e.key === "Enter") loadDeliveries().catch((err) => log(err.message, "error")); });
+  $("deliveryEventFilter").addEventListener("keydown", (e) => { if (e.key === "Enter") loadDeliveries().catch((err) => log(err.message, "error")); });
   $("clearLog").addEventListener("click", () => { logBox.textContent = ""; });
 
   if (settingsReady()) {
