@@ -177,6 +177,31 @@
           </table>
         </div>
       </section>
+
+      <section class="panel wide">
+        <div class="panel-head">
+          <div>
+            <h2>Admin audit log</h2>
+            <p>Inspect mutating admin actions for incident response and compliance.</p>
+          </div>
+          <button id="refreshAudit" class="secondary">Refresh</button>
+        </div>
+
+        <div class="filters audit-filters">
+          <input id="auditActionFilter" value="" placeholder="action, e.g. sources:update">
+          <input id="auditTargetTypeFilter" value="" placeholder="target type: source/event/delivery">
+          <input id="auditTargetIdFilter" value="" placeholder="target public id">
+        </div>
+
+        <div class="table-wrap audit-table-wrap">
+          <table>
+            <thead>
+              <tr><th>Action</th><th>Target</th><th>Status</th><th>Path</th><th>IP</th><th>Created</th></tr>
+            </thead>
+            <tbody id="auditTable"></tbody>
+          </table>
+        </div>
+      </section>
     </main>
 
     <section class="panel log-panel">
@@ -196,5 +221,6 @@
   </template>
 
   <script src="/admin/app.js"></script>
+  <script src="/admin/audit.js"></script>
 </body>
 </html>
