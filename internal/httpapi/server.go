@@ -603,18 +603,17 @@ func normalizeForwardURL(w http.ResponseWriter, r *http.Request, value *string) 
 	if value == nil {
 		return nil, true
 	}
+
 	trimmed := strings.TrimSpace(*value)
 	if trimmed == "" {
 		return nil, true
 	}
-	if len(trimmed) > 2000 {
-		writeError(w, http.StatusBadRequest, "forward_url must be shorter than 2000 characters", requestID(r))
+
+	if err := security.ValidateForwardURL(trimmed, false); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error(), requestID(r))
 		return nil, false
 	}
-	if !strings.HasPrefix(trimmed, "https://") && !strings.HasPrefix(trimmed, "http://") {
-		writeError(w, http.StatusBadRequest, "forward_url must start with http:// or https://", requestID(r))
-		return nil, false
-	}
+
 	return &trimmed, true
 }
 
