@@ -1,0 +1,99 @@
+name: Bug report
+description: Report a reproducible problem in SignalBox
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve SignalBox. Please do not include source tokens, admin API keys, HMAC keys, customer payload secrets, or private webhook data.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened?
+      placeholder: SignalBox failed to...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Exact steps to reproduce the issue.
+      placeholder: |
+        1. Start SignalBox with...
+        2. Create source...
+        3. Send event...
+        4. See error...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - webhook ingestion
+        - event storage
+        - deduplication
+        - delivery queue
+        - Telegram delivery
+        - HTTP forwarding
+        - Admin API
+        - Admin UI
+        - audit log
+        - metrics
+        - deployment
+        - documentation
+        - other
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Runtime and deployment details.
+      placeholder: |
+        SignalBox version/commit:
+        Deployment: Docker Compose / binary / other
+        OS:
+        PostgreSQL version:
+        Reverse proxy:
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or diagnostics
+      description: Paste sanitized logs, delivery diagnostics or screenshots.
+      render: text
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety checklist
+      options:
+        - label: I removed source tokens, admin API keys, HMAC keys and private payload secrets.
+          required: true
+        - label: I checked the latest main branch or latest release before filing this issue.
+          required: true
