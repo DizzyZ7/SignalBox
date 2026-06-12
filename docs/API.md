@@ -301,7 +301,7 @@ Response:
 ## List delivery jobs
 
 ```http
-GET /v1/deliveries?status=failed&channel=http&limit=50&offset=0
+GET /v1/deliveries?status=failed&channel=http&source=<SOURCE_ID>&event_id=<EVENT_ID>&limit=50&offset=0
 X-API-Key: <ADMIN_API_KEY>
 ```
 
@@ -313,6 +313,10 @@ Query params:
 | `offset` | integer | Offset pagination |
 | `status` | string | Optional `pending`, `processing`, `sent`, `failed` |
 | `channel` | string | Optional delivery channel, for example `telegram` or `http` |
+| `source` | string | Optional source public ID |
+| `event_id` | string | Optional event public ID |
+
+These filters are useful for incident response: you can inspect all failed delivery jobs for one source, or all delivery jobs created from one event.
 
 ## Get delivery job
 
