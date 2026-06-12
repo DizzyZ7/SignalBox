@@ -121,6 +121,11 @@ h2 {
   font-size: 20px;
 }
 
+h3 {
+  margin: 0 0 12px;
+  font-size: 15px;
+}
+
 p {
   margin-bottom: 0;
   color: var(--muted);
@@ -305,6 +310,10 @@ label {
   grid-template-columns: 1.2fr 1fr 1.4fr;
 }
 
+.incident-filters {
+  grid-template-columns: minmax(240px, 1fr) auto;
+}
+
 .table-wrap {
   overflow-x: auto;
   border: 1px solid var(--border);
@@ -361,9 +370,63 @@ code, .mono {
 .badge.warn { background: rgba(251, 191, 36, 0.12); color: var(--warn); }
 .badge.ok { background: rgba(52, 211, 153, 0.12); color: var(--ok); }
 
-.empty {
+.empty, .incident-empty, .source-health-loading {
   color: var(--muted);
   text-align: center;
+}
+
+.source-health-loading {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.incident-body {
+  display: grid;
+  gap: 16px;
+}
+
+.incident-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.incident-summary article,
+.incident-grid section {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(2, 18, 16, 0.55);
+  padding: 14px;
+}
+
+.incident-summary span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.incident-summary strong {
+  display: block;
+  margin-bottom: 6px;
+  line-height: 1.35;
+}
+
+.incident-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.incident-table table {
+  min-width: 420px;
+}
+
+.incident-table th,
+.incident-table td {
+  padding: 10px;
+  font-size: 12px;
 }
 
 .log-panel {
@@ -386,9 +449,10 @@ pre {
   .shell { padding: 18px; }
   .topbar, .auth-panel, .panel-head { grid-template-columns: 1fr; flex-direction: column; align-items: stretch; }
   .auth-panel { display: grid; }
-  .form-grid, .inline-form, .source-form, .filters, .delivery-filters, .audit-filters { grid-template-columns: 1fr; }
+  .form-grid, .inline-form, .source-form, .filters, .delivery-filters, .audit-filters, .incident-filters { grid-template-columns: 1fr; }
   textarea, .template-actions { grid-column: auto; }
   .template-actions { flex-direction: column; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
   .grid { grid-template-columns: 1fr; }
+  .incident-summary, .incident-grid { grid-template-columns: 1fr; }
 }
