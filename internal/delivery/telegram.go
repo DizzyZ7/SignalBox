@@ -113,15 +113,22 @@ func (n *TelegramNotifier) enqueueTelegram(event domain.Event, source domain.Sou
 }
 
 func (n *TelegramNotifier) enqueueHTTP(event domain.Event, source domain.Source) {
-	destination := strings.TrimSpace(*source.ForwardURL)
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	if err := n.store.EnqueueDeliveryJob(ctx, event.ID, "http", destination, event.Payload, n.maxAttempts); err != nil {
-		n.log.Error("enqueue http delivery failed", slog.Int64("event_id", event.ID), slog.String("error", err.Error()))
-		n.store.RecordDeliveryAttempt(context.Background(), event.ID, "http", "enqueue_failed", stringPtr(err.Error()))
+	provider := NewHTTPForwardProvider()
+	job, err := provider.BuildJobPayload(context.Background(), event, source)
+	if err != nil {
+		n.log.Error("build http delivery job failed", slog.Int64("event_id", event.ID), slog.String("source_id", source.PublicID), slog.String("error", err.Error()))
+		n.store.RecordDeliveryAttempt(context.Background(), event.ID, HTTPForwardChannel, "enqueue_failed", stringPtr(err.Error()))
 		return
 	}
-	n.store.RecordDeliveryAttempt(context.Background(), event.ID, "http", "queued", nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := n.store.EnqueueDeliveryJob(ctx, event.ID, job.Channel, job.Destination, job.Payload, n.maxAttempts); err != nil {
+		n.log.Error("enqueue http delivery failed", slog.Int64("event_id", event.ID), slog.String("error", err.Error()))
+		n.store.RecordDeliveryAttempt(context.Background(), event.ID, job.Channel, "enqueue_failed", stringPtr(err.Error()))
+		return
+	}
+	n.store.RecordDeliveryAttempt(context.Background(), event.ID, job.Channel, "queued", nil)
 }
 
 func (n *TelegramNotifier) chatIDFor(source domain.Source) string {
