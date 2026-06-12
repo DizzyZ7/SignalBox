@@ -134,6 +134,7 @@ function openSourceEditor(id) {
   $("editSourceActive").checked = Boolean(source.is_active);
   $("editTemplatePreviewCard").hidden = true;
   $("editTemplatePreview").textContent = "";
+  resetTestPayload();
   $("sourceEditor").hidden = false;
   $("sourceEditor").scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -143,6 +144,7 @@ function closeSourceEditor() {
   $("sourceEditor").hidden = true;
   $("editTemplatePreviewCard").hidden = true;
   $("editTemplatePreview").textContent = "";
+  $("testEventPayload").value = "";
 }
 
 async function saveSourceEdit() {
@@ -193,9 +195,10 @@ async function sendSelectedSourceTestEvent() {
     return;
   }
 
+  const payload = normalizeTestPayload(parseTestPayload());
   const result = await api(`/v1/sources/${encodeURIComponent(state.selectedSourceId)}/test-event`, {
     method: "POST",
-    body: JSON.stringify({ payload: defaultTestPayload() }),
+    body: JSON.stringify({ payload }),
   });
 
   await loadEvents();
@@ -207,14 +210,52 @@ async function sendSelectedSourceTestEvent() {
 }
 
 function defaultTestPayload() {
+  const source = state.selectedSourceId ? sourceById(state.selectedSourceId) : null;
+
   return {
     type: "signalbox.test",
     source: "admin-ui",
-    external_id: `test-${Date.now()}`,
+    external_id: "AUTO",
     message: "Test event from SignalBox Admin UI",
+    source_context: {
+      id: source?.id || state.selectedSourceId || "unknown",
+      name: source?.name || "unknown",
+    },
     repository: { full_name: "DizzyZ7/SignalBox" },
     sender: { login: "DizzyZ7" },
   };
+}
+
+function resetTestPayload() {
+  $("testEventPayload").value = JSON.stringify(defaultTestPayload(), null, 2);
+}
+
+function parseTestPayload() {
+  const raw = $("testEventPayload").value.trim();
+  if (!raw) {
+    return {};
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    throw new Error("test event payload must be valid JSON");
+  }
+
+  if (!payload || Array.isArray(payload) || typeof payload !== "object") {
+    throw new Error("test event payload must be a JSON object");
+  }
+
+  return payload;
+}
+
+function normalizeTestPayload(payload) {
+  const normalized = { ...payload };
+  if (normalized.external_id == null || normalized.external_id === "" || normalized.external_id === "AUTO") {
+    normalized.external_id = `test-${Date.now()}`;
+  }
+  return normalized;
 }
 
 async function previewEditTemplate() {
@@ -438,6 +479,7 @@ function init() {
   $("cancelEditSource").addEventListener("click", closeSourceEditor);
   $("saveSourceEdit").addEventListener("click", () => saveSourceEdit().catch((err) => log(err.message, "error")));
   $("sendTestEvent").addEventListener("click", () => sendSelectedSourceTestEvent().catch((err) => log(err.message, "error")));
+  $("resetTestPayload").addEventListener("click", resetTestPayload);
   $("rotateSourceToken").addEventListener("click", () => rotateSelectedSourceToken().catch((err) => log(err.message, "error")));
   $("previewEditTemplate").addEventListener("click", () => previewEditTemplate().catch((err) => log(err.message, "error")));
   $("eventTypeFilter").addEventListener("keydown", (e) => { if (e.key === "Enter") loadEvents().catch((err) => log(err.message, "error")); });
