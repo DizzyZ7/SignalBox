@@ -92,8 +92,15 @@
             </label>
           </div>
 
+          <div class="test-event-card">
+            <div class="preview-title">Test event payload</div>
+            <textarea id="testEventPayload" class="json-editor" spellcheck="false" autocomplete="off"></textarea>
+            <p class="hint">Edit a JSON object for POST /v1/sources/{id}/test-event. Use external_id "AUTO" to generate a fresh id on every send.</p>
+          </div>
+
           <div class="template-actions">
             <button type="button" id="previewEditTemplate" class="secondary">Preview template</button>
+            <button type="button" id="resetTestPayload" class="secondary">Reset payload</button>
             <button type="button" id="sendTestEvent" class="secondary">Send test event</button>
             <button type="button" id="rotateSourceToken" class="secondary">Rotate token</button>
             <button type="button" id="saveSourceEdit">Save changes</button>
