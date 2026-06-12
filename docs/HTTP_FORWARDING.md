@@ -32,6 +32,27 @@ The key is not returned by the API. Responses only expose whether it is configur
 }
 ```
 
+## Forward URL safety
+
+HTTP forwarding is designed for external webhook targets. To reduce SSRF risk, SignalBox blocks forwarding to local and private network destinations by default.
+
+Rejected destinations include:
+
+```text
+localhost
+*.localhost
+*.local
+127.0.0.0/8
+10.0.0.0/8
+172.16.0.0/12
+192.168.0.0/16
+loopback, link-local, multicast and unspecified IPv6 targets
+```
+
+SignalBox validates both literal IP hosts and DNS resolution results before sending an HTTP forwarding request. Unsafe targets are marked as failed delivery jobs instead of being called.
+
+For private self-hosted topologies, prefer routing through an explicit public/internal gateway. A future allowlist-based configuration can be added without weakening the hosted/default security model.
+
 ## Delivery behavior
 
 HTTP forwarding uses the same durable delivery queue as Telegram delivery.
