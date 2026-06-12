@@ -18,6 +18,7 @@ The UI is embedded into the Go binary with `embed`, so it does not require Node.
 - source editing
 - source active/inactive switching
 - source token rotation
+- source test event sending
 - Telegram chat id configuration
 - Telegram message template configuration
 - Telegram template preview
@@ -98,6 +99,7 @@ The editor supports:
 - HTTP forward URL update or clear
 - HMAC key rotation by entering a new value
 - source token rotation
+- test event sending
 ```
 
 Important behavior:
@@ -110,6 +112,28 @@ Blank HMAC key in edit mode keeps the current HMAC key unchanged.
 ```
 
 Token rotation returns the new source token once in the activity log. Save it immediately.
+
+## Sending a test event
+
+In the source editor, click `Send test event`.
+
+The UI calls:
+
+```text
+POST /v1/sources/{id}/test-event
+```
+
+The backend creates a real test event for the selected source and runs it through the same storage, deduplication and delivery queue path as a normal incoming webhook.
+
+After a successful test, the UI refreshes:
+
+```text
+- Events
+- Deliveries
+- Stats
+```
+
+This is useful for checking Telegram delivery, HTTP forwarding and templates without using curl or exposing the source token.
 
 ## Recommended reverse proxy rule
 
