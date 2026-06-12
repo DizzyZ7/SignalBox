@@ -3,9 +3,12 @@ package delivery
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	"github.com/DizzyZ7/SignalBox/internal/domain"
 )
+
+var ErrProviderNotConfigured = errors.New("delivery provider is not configured for this source")
 
 // Provider is the contract for a concrete outbound delivery integration.
 //
