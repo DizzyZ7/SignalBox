@@ -187,6 +187,36 @@ async function rotateSelectedSourceToken() {
   log(`source token rotated: ${state.selectedSourceId}. New token: ${result.token || "not returned"}`);
 }
 
+async function sendSelectedSourceTestEvent() {
+  if (!state.selectedSourceId) {
+    log("no source selected", "error");
+    return;
+  }
+
+  const result = await api(`/v1/sources/${encodeURIComponent(state.selectedSourceId)}/test-event`, {
+    method: "POST",
+    body: JSON.stringify({ payload: defaultTestPayload() }),
+  });
+
+  await loadEvents();
+  await loadDeliveries();
+  await loadStats();
+
+  const eventID = result?.event?.id || "unknown";
+  log(`test event accepted: ${eventID}. queued=${Boolean(result.queued)}`);
+}
+
+function defaultTestPayload() {
+  return {
+    type: "signalbox.test",
+    source: "admin-ui",
+    external_id: `test-${Date.now()}`,
+    message: "Test event from SignalBox Admin UI",
+    repository: { full_name: "DizzyZ7/SignalBox" },
+    sender: { login: "DizzyZ7" },
+  };
+}
+
 async function previewEditTemplate() {
   const telegramTemplate = $("editSourceTemplate").value.trim();
   if (!telegramTemplate) {
@@ -407,6 +437,7 @@ function init() {
   $("previewTemplate").addEventListener("click", () => previewTemplate().catch((err) => log(err.message, "error")));
   $("cancelEditSource").addEventListener("click", closeSourceEditor);
   $("saveSourceEdit").addEventListener("click", () => saveSourceEdit().catch((err) => log(err.message, "error")));
+  $("sendTestEvent").addEventListener("click", () => sendSelectedSourceTestEvent().catch((err) => log(err.message, "error")));
   $("rotateSourceToken").addEventListener("click", () => rotateSelectedSourceToken().catch((err) => log(err.message, "error")));
   $("previewEditTemplate").addEventListener("click", () => previewEditTemplate().catch((err) => log(err.message, "error")));
   $("eventTypeFilter").addEventListener("keydown", (e) => { if (e.key === "Enter") loadEvents().catch((err) => log(err.message, "error")); });
