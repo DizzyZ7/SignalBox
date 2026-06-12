@@ -12,21 +12,34 @@ import (
 
 func (r *Repository) ListDeliveryJobs(ctx context.Context, filter domain.DeliveryJobFilter) ([]domain.DeliveryJob, error) {
 	query := `
-		SELECT id, public_id, event_id, channel, destination, payload, status, attempts, max_attempts, next_attempt_at, locked_until, locked_by, last_error, created_at, updated_at, sent_at
-		FROM delivery_jobs
-		WHERE 1 = 1
+		SELECT dj.id, dj.public_id, dj.event_id, dj.channel, dj.destination, dj.payload, dj.status, dj.attempts, dj.max_attempts, dj.next_attempt_at, dj.locked_until, dj.locked_by, dj.last_error, dj.created_at, dj.updated_at, dj.sent_at
+		FROM delivery_jobs dj
 	`
-	args := make([]any, 0, 4)
+	if filter.EventID != "" || filter.Source != "" {
+		query += ` JOIN events e ON e.id = dj.event_id`
+	}
+	if filter.Source != "" {
+		query += ` JOIN webhook_sources s ON s.id = e.source_id`
+	}
+	query += ` WHERE 1 = 1`
+
+	args := make([]any, 0, 6)
 	addFilter := func(sqlPart string, value any) {
 		args = append(args, value)
 		placeholder := "$" + strconv.Itoa(len(args))
 		query += " AND " + strings.Replace(sqlPart, "?", placeholder, 1)
 	}
 	if filter.Status != "" {
-		addFilter("status = ?", filter.Status)
+		addFilter("dj.status = ?", filter.Status)
 	}
 	if filter.Channel != "" {
-		addFilter("channel = ?", filter.Channel)
+		addFilter("dj.channel = ?", filter.Channel)
+	}
+	if filter.Source != "" {
+		addFilter("s.public_id = ?", filter.Source)
+	}
+	if filter.EventID != "" {
+		addFilter("e.public_id = ?", filter.EventID)
 	}
 	if filter.Limit <= 0 || filter.Limit > 200 {
 		filter.Limit = 50
@@ -35,7 +48,7 @@ func (r *Repository) ListDeliveryJobs(ctx context.Context, filter domain.Deliver
 		filter.Offset = 0
 	}
 	args = append(args, filter.Limit, filter.Offset)
-	query += fmt.Sprintf(" ORDER BY created_at DESC, id DESC LIMIT $%d OFFSET $%d", len(args)-1, len(args))
+	query += fmt.Sprintf(" ORDER BY dj.created_at DESC, dj.id DESC LIMIT $%d OFFSET $%d", len(args)-1, len(args))
 
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
