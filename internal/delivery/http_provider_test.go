@@ -3,6 +3,7 @@ package delivery
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/DizzyZ7/SignalBox/internal/domain"
@@ -34,5 +35,23 @@ func TestHTTPForwardProviderNotConfigured(t *testing.T) {
 	_, err := provider.BuildJobPayload(context.Background(), domain.Event{}, domain.Source{})
 	if !errors.Is(err, ErrProviderNotConfigured) {
 		t.Fatalf("error = %v, want ErrProviderNotConfigured", err)
+	}
+}
+
+func TestHTTPForwardProviderRejectsUnsafeDestination(t *testing.T) {
+	provider := NewHTTPForwardProvider()
+	result := provider.Deliver(context.Background(), domain.DeliveryJob{
+		Destination: "http://127.0.0.1:8080/hook",
+		Payload:     []byte(`{}`),
+	}, domain.Event{})
+
+	if result.Sent {
+		t.Fatal("expected unsafe destination to fail")
+	}
+	if result.Retryable {
+		t.Fatal("unsafe destination should not be retryable")
+	}
+	if !strings.Contains(result.Error, "unsafe http forward destination") {
+		t.Fatalf("error = %q", result.Error)
 	}
 }
