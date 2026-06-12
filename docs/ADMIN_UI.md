@@ -18,7 +18,7 @@ The UI is embedded into the Go binary with `embed`, so it does not require Node.
 - source editing
 - source active/inactive switching
 - source token rotation
-- source test event sending
+- source test event sending with editable JSON payloads
 - Telegram chat id configuration
 - Telegram message template configuration
 - Telegram template preview
@@ -42,6 +42,7 @@ The Admin UI is only a browser interface over the existing Admin API.
 - Use the UI only over HTTPS in production.
 - HTTP forward HMAC keys are write-only from the UI perspective: the API returns only whether the key is configured.
 - During source editing, leaving the HMAC input blank keeps the current key unchanged.
+- Test events are sent through the Admin API only; they do not use or expose public source tokens.
 
 For stricter environments, put `/admin` behind additional reverse-proxy authentication or VPN access.
 
@@ -99,6 +100,7 @@ The editor supports:
 - HTTP forward URL update or clear
 - HMAC key rotation by entering a new value
 - source token rotation
+- editable test event payloads
 - test event sending
 ```
 
@@ -115,13 +117,38 @@ Token rotation returns the new source token once in the activity log. Save it im
 
 ## Sending a test event
 
-In the source editor, click `Send test event`.
+In the source editor, edit the `Test event payload` JSON if needed, then click `Send test event`.
 
 The UI calls:
 
 ```text
 POST /v1/sources/{id}/test-event
 ```
+
+Request body:
+
+```json
+{
+  "payload": {
+    "type": "signalbox.test",
+    "source": "admin-ui",
+    "external_id": "test-1760000000000",
+    "message": "Test event from SignalBox Admin UI"
+  }
+}
+```
+
+The payload must be a JSON object. The UI rejects invalid JSON before sending the request.
+
+The default editor payload uses:
+
+```json
+"external_id": "AUTO"
+```
+
+When sending, the UI replaces `AUTO` with a fresh `test-<timestamp>` value. This avoids accidental deduplication when repeatedly testing the same source.
+
+Click `Reset payload` to restore the default sample payload for the currently selected source.
 
 The backend creates a real test event for the selected source and runs it through the same storage, deduplication and delivery queue path as a normal incoming webhook.
 
