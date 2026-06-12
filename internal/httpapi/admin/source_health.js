@@ -1,6 +1,7 @@
 const sourceHealthState = {
   installed: false,
   incidentInstalled: false,
+  lastIncident: null,
 };
 
 function sourceHealthBadge(status, label, title) {
@@ -118,6 +119,8 @@ function renderSourceIncidentSnapshot(sourceID, snapshot) {
     return;
   }
 
+  sourceHealthState.lastIncident = { sourceID, snapshot, generatedAt: new Date().toISOString() };
+
   const source = snapshot.source;
   const status = source?.is_active ? sourceHealthBadge("ok", "active", "Source is active") : sourceHealthBadge("danger", "inactive", "Source is disabled or not loaded in current source list");
   const deliveryFailures = snapshot.deliveries.filter((item) => item.status === "failed").length;
@@ -149,12 +152,90 @@ function renderSourceIncidentSnapshot(sourceID, snapshot) {
       <article><span>Risk</span><strong>${risk}</strong></article>
       <article><span>Latest sample</span><strong>${snapshot.events.length} events · ${snapshot.deliveries.length} deliveries · ${snapshot.audit.length} audit</strong></article>
     </div>
+    <div class="incident-actions">
+      <button id="copyIncidentDiagnostics" class="secondary" type="button">Copy diagnostics</button>
+    </div>
     <div class="incident-grid">
       <section><h3>Recent events</h3>${eventsHTML}</section>
       <section><h3>Recent deliveries</h3>${deliveriesHTML}</section>
       <section><h3>Recent audit</h3>${auditHTML}</section>
     </div>
   `;
+
+  document.getElementById("copyIncidentDiagnostics")?.addEventListener("click", () => copyIncidentDiagnostics().catch((err) => log(err.message, "error")));
+}
+
+function buildIncidentDiagnostics() {
+  const incident = sourceHealthState.lastIncident;
+  if (!incident) {
+    throw new Error("load a source incident snapshot first");
+  }
+
+  const { sourceID, snapshot, generatedAt } = incident;
+  const source = snapshot.source;
+  const lines = [];
+  lines.push("SignalBox source diagnostics");
+  lines.push(`Generated at: ${generatedAt}`);
+  lines.push(`Source: ${source?.name || "unknown"}`);
+  lines.push(`Source ID: ${sourceID}`);
+  lines.push(`Active: ${source?.is_active ?? "unknown"}`);
+  lines.push(`Forward URL configured: ${Boolean(source?.forward_url)}`);
+  lines.push(`Forward HMAC configured: ${Boolean(source?.forward_hmac_key_set)}`);
+  lines.push("");
+
+  lines.push("Recent events:");
+  if (!snapshot.events.length) {
+    lines.push("- none");
+  } else {
+    snapshot.events.forEach((event) => {
+      lines.push(`- ${event.id} | type=${event.event_type || "unknown"} | duplicate=${Boolean(event.is_duplicate)} | created=${event.created_at || "unknown"}`);
+    });
+  }
+  lines.push("");
+
+  lines.push("Recent deliveries:");
+  if (!snapshot.deliveries.length) {
+    lines.push("- none");
+  } else {
+    snapshot.deliveries.forEach((job) => {
+      lines.push(`- ${job.id} | status=${job.status || "unknown"} | channel=${job.channel || "unknown"} | attempts=${job.attempts ?? 0}/${job.max_attempts ?? "unknown"} | error=${job.last_error || "none"}`);
+    });
+  }
+  lines.push("");
+
+  lines.push("Recent audit:");
+  if (!snapshot.audit.length) {
+    lines.push("- none");
+  } else {
+    snapshot.audit.forEach((item) => {
+      lines.push(`- ${item.id} | action=${item.action || "unknown"} | status=${item.status_code || "unknown"} | path=${item.path || "unknown"} | created=${item.created_at || "unknown"}`);
+    });
+  }
+
+  return lines.join("\n");
+}
+
+async function writeClipboardText(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const area = document.createElement("textarea");
+  area.value = text;
+  area.setAttribute("readonly", "readonly");
+  area.style.position = "fixed";
+  area.style.left = "-9999px";
+  document.body.appendChild(area);
+  area.select();
+  document.execCommand("copy");
+  document.body.removeChild(area);
+}
+
+async function copyIncidentDiagnostics() {
+  const text = buildIncidentDiagnostics();
+  await writeClipboardText(text);
+  log("source diagnostics copied to clipboard");
 }
 
 async function refreshSourceIncidentSnapshot() {
