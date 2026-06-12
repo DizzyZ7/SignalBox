@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/DizzyZ7/SignalBox/internal/domain"
+	"github.com/DizzyZ7/SignalBox/internal/security"
 )
 
 type DeliveryStore interface {
@@ -227,11 +228,22 @@ func (n *TelegramNotifier) deliverTelegram(ctx context.Context, job domain.Deliv
 
 func (n *TelegramNotifier) deliverHTTP(ctx context.Context, job domain.DeliveryJob) {
 	destination := strings.TrimSpace(job.Destination)
+	if err := security.ValidateForwardURL(destination, false); err != nil {
+		n.failJob(job, "unsafe http forward destination: "+err.Error(), 0)
+		return
+	}
 	parsed, err := url.Parse(destination)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
 		n.failJob(job, "invalid http forward destination", 0)
 		return
 	}
+	resolveCtx, resolveCancel := context.WithTimeout(ctx, 3*time.Second)
+	if err := security.ValidateResolvedForwardHost(resolveCtx, parsed.Hostname(), false); err != nil {
+		resolveCancel()
+		n.failJob(job, "unsafe http forward destination: "+err.Error(), 0)
+		return
+	}
+	resolveCancel()
 
 	eventCtx, eventCancel := context.WithTimeout(ctx, 3*time.Second)
 	event, err := n.store.GetEventByInternalID(eventCtx, job.EventID)
