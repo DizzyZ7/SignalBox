@@ -5,12 +5,17 @@ function auditStatusBadge(statusCode) {
 }
 
 function auditTargetLabel(item) {
-  const type = item.target_type || "—";
+  const type = normalizeAuditTargetType(item.target_type || "—");
   const id = item.target_id || "";
   if (!id) {
     return escapeHTML(type);
   }
   return `${escapeHTML(type)}<br><code title="${escapeHTML(id)}">${escapeHTML(shortID(id))}</code>`;
+}
+
+function normalizeAuditTargetType(type) {
+  if (type === "deliverie") return "delivery";
+  return type;
 }
 
 async function loadAudit() {
@@ -49,11 +54,45 @@ async function loadAudit() {
   `).join("");
 }
 
+function shouldRefreshAuditAfterAPI(path, options) {
+  const method = String(options?.method || "GET").toUpperCase();
+  if (method === "GET") {
+    return false;
+  }
+  if (!path || path.startsWith("/v1/audit")) {
+    return false;
+  }
+  return path.startsWith("/v1/sources") ||
+    path.startsWith("/v1/events") ||
+    path.startsWith("/v1/deliveries") ||
+    path.startsWith("/v1/templates");
+}
+
+function installAuditAutoRefresh() {
+  const originalAPI = window.api;
+  if (typeof originalAPI !== "function" || originalAPI.__auditWrapped) {
+    return;
+  }
+
+  async function auditedAPI(path, options = {}) {
+    const result = await originalAPI(path, options);
+    if (shouldRefreshAuditAfterAPI(path, options)) {
+      window.setTimeout(() => loadAudit().catch((err) => log(err.message, "error")), 300);
+    }
+    return result;
+  }
+
+  auditedAPI.__auditWrapped = true;
+  window.api = auditedAPI;
+}
+
 function initAuditUI() {
   const refreshButton = document.getElementById("refreshAudit");
   if (!refreshButton) {
     return;
   }
+
+  installAuditAutoRefresh();
 
   refreshButton.addEventListener("click", () => loadAudit().catch((err) => log(err.message, "error")));
   document.getElementById("auditActionFilter").addEventListener("keydown", (event) => {
