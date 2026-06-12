@@ -1,0 +1,14 @@
+{
+  "type": "repository.push",
+  "repository": {
+    "name": "signalbox-example",
+    "owner": "demo"
+  },
+  "branch": "main",
+  "actor": "demo-user",
+  "commit": {
+    "id": "1111111",
+    "message": "Update webhook processing",
+    "timestamp": "2026-01-01T12:00:00Z"
+  }
+}
