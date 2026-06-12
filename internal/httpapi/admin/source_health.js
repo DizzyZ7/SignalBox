@@ -1,6 +1,6 @@
 const sourceHealthState = {
   installed: false,
-  timer: null,
+  incidentInstalled: false,
 };
 
 function sourceHealthBadge(status, label, title) {
@@ -74,11 +74,155 @@ async function refreshSourceHealth() {
   }));
 }
 
+function incidentMiniTable(items, columns, emptyText) {
+  if (!items.length) {
+    return `<div class="incident-empty">${escapeHTML(emptyText)}</div>`;
+  }
+  const head = columns.map((column) => `<th>${escapeHTML(column.label)}</th>`).join("");
+  const rows = items.map((item) => `
+    <tr>
+      ${columns.map((column) => `<td>${column.render(item)}</td>`).join("")}
+    </tr>
+  `).join("");
+  return `<div class="table-wrap incident-table"><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function sourceByPublicID(sourceID) {
+  return (state.sources || []).find((source) => source.id === sourceID) || null;
+}
+
+function selectedOrTypedIncidentSourceID() {
+  const typed = document.getElementById("incidentSourceId")?.value.trim() || "";
+  return typed || state.selectedSourceId || "";
+}
+
+async function loadSourceIncidentSnapshot(sourceID) {
+  const source = sourceByPublicID(sourceID);
+  const [events, deliveries, audit] = await Promise.all([
+    api(`/v1/events?source=${encodeURIComponent(sourceID)}&limit=5`),
+    api(`/v1/deliveries?source=${encodeURIComponent(sourceID)}&limit=5`),
+    api(`/v1/audit?target_type=source&target_id=${encodeURIComponent(sourceID)}&limit=5`),
+  ]);
+
+  return {
+    source,
+    events: events.items || [],
+    deliveries: deliveries.items || [],
+    audit: audit.items || [],
+  };
+}
+
+function renderSourceIncidentSnapshot(sourceID, snapshot) {
+  const target = document.getElementById("sourceIncidentBody");
+  if (!target) {
+    return;
+  }
+
+  const source = snapshot.source;
+  const status = source?.is_active ? sourceHealthBadge("ok", "active", "Source is active") : sourceHealthBadge("danger", "inactive", "Source is disabled or not loaded in current source list");
+  const deliveryFailures = snapshot.deliveries.filter((item) => item.status === "failed").length;
+  const deliveryPending = snapshot.deliveries.filter((item) => item.status === "pending").length;
+  const risk = deliveryFailures > 0 ? sourceHealthBadge("danger", "needs attention", "Failed deliveries found") : deliveryPending > 0 ? sourceHealthBadge("warn", "queue pending", "Pending deliveries found") : sourceHealthBadge("ok", "stable", "No failed/pending deliveries in latest sample");
+
+  const eventsHTML = incidentMiniTable(snapshot.events, [
+    { label: "Type", render: (item) => escapeHTML(item.event_type || "unknown") },
+    { label: "ID", render: (item) => `<code title="${escapeHTML(item.id)}">${escapeHTML(shortID(item.id))}</code>` },
+    { label: "Created", render: (item) => escapeHTML(formatDate(item.created_at)) },
+  ], "No recent events for this source");
+
+  const deliveriesHTML = incidentMiniTable(snapshot.deliveries, [
+    { label: "Status", render: (item) => deliveryBadge(item.status) },
+    { label: "Channel", render: (item) => escapeHTML(item.channel || "unknown") },
+    { label: "Attempts", render: (item) => escapeHTML(`${item.attempts ?? 0}/${item.max_attempts ?? "—"}`) },
+  ], "No recent delivery jobs for this source");
+
+  const auditHTML = incidentMiniTable(snapshot.audit, [
+    { label: "Action", render: (item) => `<span class="badge">${escapeHTML(item.action || "unknown")}</span>` },
+    { label: "Status", render: (item) => auditStatusBadge(item.status_code) },
+    { label: "Created", render: (item) => escapeHTML(formatDate(item.created_at)) },
+  ], "No recent audit events for this source");
+
+  target.innerHTML = `
+    <div class="incident-summary">
+      <article><span>Source</span><strong>${escapeHTML(source?.name || sourceID)}</strong><code>${escapeHTML(sourceID)}</code></article>
+      <article><span>Status</span><strong>${status}</strong></article>
+      <article><span>Risk</span><strong>${risk}</strong></article>
+      <article><span>Latest sample</span><strong>${snapshot.events.length} events · ${snapshot.deliveries.length} deliveries · ${snapshot.audit.length} audit</strong></article>
+    </div>
+    <div class="incident-grid">
+      <section><h3>Recent events</h3>${eventsHTML}</section>
+      <section><h3>Recent deliveries</h3>${deliveriesHTML}</section>
+      <section><h3>Recent audit</h3>${auditHTML}</section>
+    </div>
+  `;
+}
+
+async function refreshSourceIncidentSnapshot() {
+  const sourceID = selectedOrTypedIncidentSourceID();
+  const target = document.getElementById("sourceIncidentBody");
+  if (!sourceID) {
+    if (target) target.innerHTML = `<div class="incident-empty">Select a source or paste a source public id.</div>`;
+    return;
+  }
+
+  document.getElementById("incidentSourceId").value = sourceID;
+  if (target) target.innerHTML = `<div class="incident-empty">Loading source incident snapshot…</div>`;
+
+  const snapshot = await loadSourceIncidentSnapshot(sourceID);
+  renderSourceIncidentSnapshot(sourceID, snapshot);
+}
+
+function installSourceIncidentPanel() {
+  if (sourceHealthState.incidentInstalled) {
+    return;
+  }
+  const main = document.querySelector("main.grid");
+  if (!main) {
+    return;
+  }
+  sourceHealthState.incidentInstalled = true;
+
+  const section = document.createElement("section");
+  section.className = "panel wide incident-panel";
+  section.innerHTML = `
+    <div class="panel-head">
+      <div>
+        <h2>Source incident snapshot</h2>
+        <p>Load a compact investigation view for one source.</p>
+      </div>
+      <button id="refreshIncidentSnapshot" class="secondary" type="button">Refresh</button>
+    </div>
+    <div class="filters incident-filters">
+      <input id="incidentSourceId" value="" placeholder="source public id">
+      <button id="useSelectedSourceForIncident" class="secondary" type="button">Use selected source</button>
+    </div>
+    <div id="sourceIncidentBody" class="incident-body">
+      <div class="incident-empty">Select a source or paste a source public id.</div>
+    </div>
+  `;
+  main.appendChild(section);
+
+  document.getElementById("refreshIncidentSnapshot").addEventListener("click", () => refreshSourceIncidentSnapshot().catch((err) => log(err.message, "error")));
+  document.getElementById("useSelectedSourceForIncident").addEventListener("click", () => {
+    if (!state.selectedSourceId) {
+      log("select a source first", "error");
+      return;
+    }
+    document.getElementById("incidentSourceId").value = state.selectedSourceId;
+    refreshSourceIncidentSnapshot().catch((err) => log(err.message, "error"));
+  });
+  document.getElementById("incidentSourceId").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") refreshSourceIncidentSnapshot().catch((err) => log(err.message, "error"));
+  });
+}
+
 function installSourceHealthRefresh() {
   if (sourceHealthState.installed) {
     return;
   }
   sourceHealthState.installed = true;
+
+  installSourceIncidentPanel();
 
   const originalLoadSources = window.loadSources;
   if (typeof originalLoadSources === "function") {
