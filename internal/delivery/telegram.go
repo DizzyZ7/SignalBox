@@ -12,14 +12,12 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"text/template"
 	"time"
 
 	"github.com/DizzyZ7/SignalBox/internal/domain"
-	"github.com/DizzyZ7/SignalBox/internal/security"
 )
 
 type DeliveryStore interface {
@@ -192,7 +190,7 @@ func (n *TelegramNotifier) deliver(ctx context.Context, job domain.DeliveryJob) 
 	switch job.Channel {
 	case "telegram":
 		n.deliverTelegram(ctx, job)
-	case "http":
+	case HTTPForwardChannel:
 		n.deliverHTTP(ctx, job)
 	default:
 		n.failJob(job, "unsupported delivery channel: "+job.Channel, 0)
@@ -234,24 +232,6 @@ func (n *TelegramNotifier) deliverTelegram(ctx context.Context, job domain.Deliv
 }
 
 func (n *TelegramNotifier) deliverHTTP(ctx context.Context, job domain.DeliveryJob) {
-	destination := strings.TrimSpace(job.Destination)
-	if err := security.ValidateForwardURL(destination, false); err != nil {
-		n.failJob(job, "unsafe http forward destination: "+err.Error(), 0)
-		return
-	}
-	parsed, err := url.Parse(destination)
-	if err != nil || parsed.Scheme == "" || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		n.failJob(job, "invalid http forward destination", 0)
-		return
-	}
-	resolveCtx, resolveCancel := context.WithTimeout(ctx, 3*time.Second)
-	if err := security.ValidateResolvedForwardHost(resolveCtx, parsed.Hostname(), false); err != nil {
-		resolveCancel()
-		n.failJob(job, "unsafe http forward destination: "+err.Error(), 0)
-		return
-	}
-	resolveCancel()
-
 	eventCtx, eventCancel := context.WithTimeout(ctx, 3*time.Second)
 	event, err := n.store.GetEventByInternalID(eventCtx, job.EventID)
 	eventCancel()
@@ -260,48 +240,20 @@ func (n *TelegramNotifier) deliverHTTP(ctx context.Context, job domain.DeliveryJ
 		return
 	}
 
-	timestamp := strconv.FormatInt(time.Now().UTC().Unix(), 10)
-	deliveryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(deliveryCtx, http.MethodPost, destination, bytes.NewReader(job.Payload))
-	if err != nil {
-		n.failJob(job, err.Error(), backoff(job.Attempts))
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "SignalBox/1.0")
-	req.Header.Set("X-SignalBox-Event-ID", event.PublicID)
-	req.Header.Set("X-SignalBox-Delivery-ID", job.PublicID)
-	req.Header.Set("X-SignalBox-Timestamp", timestamp)
-	if event.Source != nil {
-		req.Header.Set("X-SignalBox-Source-ID", event.Source.PublicID)
-	}
-	if event.EventType != nil {
-		req.Header.Set("X-SignalBox-Event-Type", *event.EventType)
-	}
-	if event.Source != nil && event.Source.ForwardHMACKey != nil && strings.TrimSpace(*event.Source.ForwardHMACKey) != "" {
-		signature := signPayload(*event.Source.ForwardHMACKey, timestamp, job.Payload)
-		req.Header.Set("X-SignalBox-Signature", "sha256="+signature)
-	}
-
-	resp, err := n.client.Do(req)
-	if err != nil {
-		n.failJob(job, err.Error(), backoff(job.Attempts))
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		errText := strings.TrimSpace(fmt.Sprintf("http forward status %d %s", resp.StatusCode, string(body)))
-		n.failJob(job, errText, retryAfter(resp, backoff(job.Attempts)))
+	provider := &HTTPForwardProvider{client: n.client}
+	result := provider.Deliver(ctx, job, event)
+	if result.Sent {
+		if n.markSent(job) {
+			n.store.RecordDeliveryAttempt(context.Background(), job.EventID, job.Channel, "sent", nil)
+		}
 		return
 	}
 
-	if n.markSent(job) {
-		n.store.RecordDeliveryAttempt(context.Background(), job.EventID, "http", "sent", nil)
+	errText := strings.TrimSpace(result.Error)
+	if errText == "" {
+		errText = "http forward delivery failed"
 	}
+	n.failJob(job, errText, time.Duration(result.RetryAfter)*time.Second)
 }
 
 func (n *TelegramNotifier) markSent(job domain.DeliveryJob) bool {
